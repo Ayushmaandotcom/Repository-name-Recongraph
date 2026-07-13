@@ -34,9 +34,7 @@ PURCHASE_TO_GST_POLICY = RelationshipPolicy(
         SignalName.TEMPORAL: 0.10,
         SignalName.TAX_IDENTITY: 0.25,
     },
-    contradiction_penalties={
-        SignalName.TAX_IDENTITY: 0.50,
-    },
+    contradiction_penalties={},
 )
 
 

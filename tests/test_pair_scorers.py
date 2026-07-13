@@ -59,13 +59,8 @@ def test_purchase_to_gst_policy_uses_expected_weights() -> None:
     }
 
 
-def test_purchase_to_gst_policy_penalizes_tax_identity_contradiction() -> None:
-    assert (
-        PURCHASE_TO_GST_POLICY.contradiction_penalties[
-            SignalName.TAX_IDENTITY
-        ]
-        == 0.50
-    )
+def test_purchase_gst_policy_uses_pure_compatibility() -> None:
+    assert PURCHASE_TO_GST_POLICY.contradiction_penalties == {}
 
 
 def test_purchase_to_gst_temporal_window_is_seven_days() -> None:
@@ -257,7 +252,7 @@ def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
     )
     
     assert result.relationship.score == pytest.approx(
-        0.34785714285714286
+        0.6957142857142857
     )
 
 
@@ -364,16 +359,14 @@ def test_score_purchase_to_gst_applies_tax_contradiction() -> None:
     )
     assert result.relationship.coverage == pytest.approx(1.0)
     assert result.relationship.contradiction_penalty == pytest.approx(
-        0.5
+        1.0
     )
-    assert result.relationship.active_contradictions == (
-        SignalName.TAX_IDENTITY,
-    )
+    assert result.relationship.active_contradictions == ()
     assert result.relationship.base_score == pytest.approx(
         0.6957142857142857
     )
     assert result.relationship.score == pytest.approx(
-        0.34785714285714286
+        0.6957142857142857
     )
 
 
@@ -487,5 +480,41 @@ def test_high_compatibility_pair_can_be_ineligible() -> None:
     )
     assert result.eligibility.blocking_findings == (
         SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+    )
+
+
+def test_purchase_gst_tax_conflict_does_not_apply_compatibility_penalty() -> None:
+    purchase = PurchaseRecord(
+        vendor_name="ABC Steel Private Limited",
+        reference="INV-1042",
+        amount=118000.0,
+        record_date=date(2026, 6, 12),
+        tax_identity="07ABCDE1234F1Z5",
+    )
+    gst_record = GSTRecord(
+        vendor_name="ABC Steel Private Limited",
+        reference="AB/1042",
+        amount=118000.0,
+        record_date=date(2026, 6, 13),
+        tax_identity="29XYZAB5678C1Z2",
+    )
+
+    result = score_purchase_to_gst(
+        purchase=purchase,
+        gst_record=gst_record,
+    )
+
+    assert result.relationship.base_score == pytest.approx(
+        0.6957142857142857
+    )
+    assert result.relationship.score == pytest.approx(
+        0.6957142857142857
+    )
+    assert result.relationship.contradiction_penalty == 1.0
+    assert result.relationship.active_contradictions == ()
+
+    assert result.eligibility.status is OneToOneEligibility.INELIGIBLE
+    assert result.eligibility.blocking_findings == (
+        SemanticFinding.TAX_IDENTITY_CONFLICT,
     )
 

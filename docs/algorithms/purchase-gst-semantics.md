@@ -249,3 +249,36 @@ baseline datasets.
 
 No compatibility scoring behaviour is changed in the initial eligibility
 implementation.
+
+## Compatibility and eligibility separation
+
+1. Purchase ↔ GST compatibility measures weighted primitive evidence alignment.
+2. A tax identity mismatch contributes 0.0 through the tax identity signal.
+3. Purchase ↔ GST compatibility does not additionally apply a tax contradiction multiplier.
+4. A tax identity conflict remains a blocking semantic finding for the automatic 1:1 hypothesis.
+5. Therefore, a pair may have high compatibility and still be 1:1 ineligible.
+6. Removing the Purchase ↔ GST tax penalty does not remove generic contradiction-penalty support from the relationship scoring engine.
+
+### Tax penalty comparison experiment
+
+Pairs compared: 31
+Scores changed: 22
+Eligibility changes: 0
+
+Minimum positive score:
+hybrid = 0.9457
+pure   = 0.9457
+
+Maximum negative score:
+hybrid = 0.0779
+pure   = 0.1557
+
+Separation gap:
+hybrid = 0.8679
+pure   = 0.7900
+
+**Decision**:
+Purchase ↔ GST uses pure compatibility without a tax contradiction multiplier.
+
+**Rationale**:
+The tax mismatch already contributes zero weighted evidence and independently blocks 1:1 eligibility. The additional multiplicative penalty mixed domain eligibility semantics into the compatibility score and could suppress diagnostic visibility into flaws in other primitive signals.
