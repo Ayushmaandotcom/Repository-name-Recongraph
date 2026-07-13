@@ -111,3 +111,11 @@ The interpretation step operates on read-only evidence and profiles.
 
 ### IC-010 — Interpretation is not final reconciliation
 Reference interpretation cannot emit `AUTO_MATCH`, `REVIEW`, `REJECT`, or `INELIGIBLE`. Those belong to later relationship semantics/decision layers.
+
+## v0.1 Strongest-Unit Coverage Semantics
+
+Statistical coverage is path-dependent. Under v0.1 strongest-unit interpretation, exactly one contribution determines the final reference score. Therefore statistical coverage is binary: 1.0 when the selected contribution has corpus statistics and 0.0 when the selected contribution uses structural fallback.
+
+Non-winning contributions do not dilute coverage because they were not consumed to determine the final magnitude.
+
+When two contributions have equal positive evidence magnitude, a contribution with available corpus statistics is preferred over one using structural fallback.

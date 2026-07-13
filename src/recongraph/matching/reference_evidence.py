@@ -1,5 +1,7 @@
 import re
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Mapping, Optional, Tuple
 
 from recongraph.normalization.text import normalize_reference
 
@@ -207,3 +209,199 @@ def enrich_reference_identity(
         normalized_references=tuple(norm_evidence),
         shared_numeric_tokens=tuple(token_evidence),
     )
+
+@dataclass(frozen=True)
+class ReferenceEvidencePolicy:
+    short_token_max_length: int = 2
+    medium_token_max_length: int = 4
+    short_token_fallback: float = 0.10
+    medium_token_fallback: float = 0.30
+    long_token_fallback: float = 0.60
+    exact_reference_fallback: float = 0.60
+    repeated_pattern_discount: float = 0.50
+
+    def __post_init__(self):
+        import math
+        if self.short_token_max_length < 1:
+            raise ValueError("short_token_max_length must be >= 1")
+        if self.medium_token_max_length <= self.short_token_max_length:
+            raise ValueError("medium_token_max_length must be > short_token_max_length")
+
+        # Basic float bounds
+        for val in (self.short_token_fallback,
+            self.medium_token_fallback,
+            self.long_token_fallback,
+            self.exact_reference_fallback,
+            self.repeated_pattern_discount):
+            
+            if math.isnan(val) or math.isinf(val):
+                raise ValueError("Float parameters cannot be NaN or infinity")
+            if not (0.0 <= val <= 1.0):
+                raise ValueError("All float parameters must be between 0.0 and 1.0")
+
+        if not (self.short_token_fallback <= self.medium_token_fallback <= self.long_token_fallback):
+            raise ValueError("Fallbacks must be monotonically non-decreasing")
+
+        if self.long_token_fallback > 0.75:
+            raise ValueError("long_token_fallback must be <= 0.75 for safety")
+            
+        if self.exact_reference_fallback > 0.75:
+            raise ValueError("exact_reference_fallback must be <= 0.75 for safety")
+
+class ReferenceEvidenceKind(StrEnum):
+    NORMALIZED_REFERENCE = "normalized_reference"
+    SHARED_NUMERIC_TOKEN = "shared_numeric_token"
+
+@dataclass(frozen=True)
+class ReferenceEvidenceContribution:
+    evidence_kind: ReferenceEvidenceKind
+    identity_value: str
+    positive_evidence: float
+    statistics_available: bool
+
+    def __post_init__(self):
+        if not self.identity_value:
+            raise ValueError("identity_value cannot be empty")
+        
+        import math
+        if not math.isfinite(self.positive_evidence):
+            raise ValueError("positive_evidence must be finite")
+        if not (0.0 <= self.positive_evidence <= 1.0):
+            raise ValueError("positive_evidence must be between 0.0 and 1.0")
+
+        if self.evidence_kind == ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN:
+            if not self.identity_value.isdigit():
+                raise ValueError("SHARED_NUMERIC_TOKEN identity_value must be numeric")
+        
+        if self.evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE:
+            from recongraph.matching.signals import normalize_reference
+            if normalize_reference(self.identity_value) != self.identity_value:
+                raise ValueError("NORMALIZED_REFERENCE identity_value must be normalized")
+
+@dataclass(frozen=True)
+class ReferenceEvidenceInterpretation:
+    score: float
+    statistical_coverage: float
+    contributions: tuple[ReferenceEvidenceContribution, ...]
+
+    def __post_init__(self):
+        import math
+        if not math.isfinite(self.score):
+            raise ValueError("score must be finite")
+        if not (0.0 <= self.score <= 1.0):
+            raise ValueError("score must be between 0.0 and 1.0")
+            
+        if not math.isfinite(self.statistical_coverage):
+            raise ValueError("statistical_coverage must be finite")
+        if not (0.0 <= self.statistical_coverage <= 1.0):
+            raise ValueError("statistical_coverage must be between 0.0 and 1.0")
+
+        if not self.contributions:
+            raise ValueError("contributions cannot be empty")
+
+        max_score = max(c.positive_evidence for c in self.contributions)
+        if not math.isclose(self.score, max_score, abs_tol=1e-9):
+            raise ValueError("score must equal the strongest contribution magnitude")
+
+        if self.statistical_coverage not in {0.0, 1.0}:
+            raise ValueError("statistical_coverage must be binary (0.0 or 1.0) under strongest-unit interpretation")
+
+        # Tie breaking for coverage
+        # Find all contributions that match the max score
+        strongest_contribs = [c for c in self.contributions if math.isclose(c.positive_evidence, self.score, abs_tol=1e-9)]
+        
+        # Check if any of the strongest contributions have statistics_available = True
+        has_profiled_winner = any(c.statistics_available for c in strongest_contribs)
+        
+        expected_coverage = 1.0 if has_profiled_winner else 0.0
+        if self.statistical_coverage != expected_coverage:
+            raise ValueError(f"statistical_coverage mismatch: expected {expected_coverage} based on winning contribution(s)")
+
+def _profiled_rarity_magnitude(
+    frequency: int,
+    reference_count: int,
+) -> float:
+    if frequency < 1:
+        raise ValueError("frequency must be >= 1")
+    if reference_count < 1:
+        raise ValueError("reference_count must be >= 1")
+    if frequency > reference_count:
+        raise ValueError("frequency cannot exceed reference_count")
+        
+    import math
+    return 1.0 - math.sqrt(frequency / reference_count)
+
+def _structural_token_magnitude(
+    token: str,
+    policy: ReferenceEvidencePolicy,
+) -> float:
+    if not token or not token.isdigit():
+        raise ValueError("invalid numeric token")
+
+    n = len(token)
+    if n <= policy.short_token_max_length:
+        base_magnitude = policy.short_token_fallback
+    elif n <= policy.medium_token_max_length:
+        base_magnitude = policy.medium_token_fallback
+    else:
+        base_magnitude = policy.long_token_fallback
+
+    # Single-symbol repetition detection
+    if len(set(token)) == 1:
+        return base_magnitude * policy.repeated_pattern_discount
+        
+    return base_magnitude
+
+def _construct_reference_evidence_contributions(
+    evidence: EnrichedReferenceEvidence,
+    profile: ReferenceCorpusProfile,
+    policy: ReferenceEvidencePolicy,
+) -> tuple[ReferenceEvidenceContribution, ...]:
+    contributions = []
+
+    if evidence.identity.exact_normalized_match:
+        # 1. Exact normalized full-reference identity is the primary evidence unit
+        # 2. Shared numeric tokens are bypassed completely
+        # 3. Exactly ONE contribution is produced
+        norm_ev = evidence.normalized_references[0]
+        
+        if norm_ev.statistics is not None:
+            positive_evidence = _profiled_rarity_magnitude(
+                frequency=norm_ev.statistics.frequency,
+                reference_count=profile.reference_count,
+            )
+            stats_available = True
+        else:
+            positive_evidence = policy.exact_reference_fallback
+            stats_available = False
+            
+        contributions.append(ReferenceEvidenceContribution(
+            evidence_kind=ReferenceEvidenceKind.NORMALIZED_REFERENCE,
+            identity_value=norm_ev.normalized_reference,
+            positive_evidence=positive_evidence,
+            statistics_available=stats_available,
+        ))
+    else:
+        # Construct one contribution for EACH shared numeric token
+        for token_ev in evidence.shared_numeric_tokens:
+            if token_ev.statistics is not None:
+                positive_evidence = _profiled_rarity_magnitude(
+                    frequency=token_ev.statistics.document_frequency,
+                    reference_count=profile.reference_count,
+                )
+                stats_available = True
+            else:
+                positive_evidence = _structural_token_magnitude(
+                    token=token_ev.token,
+                    policy=policy,
+                )
+                stats_available = False
+                
+            contributions.append(ReferenceEvidenceContribution(
+                evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
+                identity_value=token_ev.token,
+                positive_evidence=positive_evidence,
+                statistics_available=stats_available,
+            ))
+            
+    return tuple(contributions)

@@ -50,5 +50,28 @@ Digit diversity can distinguish `874219` and `000000`, but gives superficially h
 Therefore: No single structural feature currently justifies a probability-like interpretation of out-of-profile token evidence.
 
 ## v0.1 Fallback Principle
-**Status**: Proposed
-Structural fallback should be conservative, bounded below fully profiled rare identity evidence, and explicitly marked as statistically uncovered.
+**Status**: Frozen
+
+Structural fallback is heuristic, not empirical rarity. Token length selects a fallback band, and fallback magnitudes are monotonically non-decreasing. Equal fallback bands are valid.
+
+v0.1 repetition detection means single-symbol repetition only. 
+Examples: `000`, `111`, `999999`
+Non-examples: `001`, `121212`, `123123`, `101010`, `000001`
+
+Periodicity is deliberately excluded because ReconGraph currently has no corpus evidence proving periodic identifiers are less discriminative.
+`repeated_pattern_discount` is multiplicative. A discount of `0.0` or `1.0` is valid. Structural fallback remains subject to the existing policy safety ceiling.
+
+**Accepted Limitation**: A structurally repetitive token such as `121212` may receive the same unprofiled fallback magnitude as `874219` in v0.1. This is accepted because ReconGraph does not yet have empirical evidence supporting a broader complexity-based penalty. Corpus-profiled evidence remains the preferred path for measuring actual discriminativeness.
+
+## Exact Full-Reference Identity Fallback
+**Status**: Frozen
+
+An exact normalized full-reference identity and a shared numeric-token identity are distinct evidence units. 
+When corpus statistics are unavailable for an exact normalized match, it receives heuristic positive evidence defined by `exact_reference_fallback` (default `0.60`). 
+
+- It represents heuristic structural evidence, NOT empirical rarity and NOT probability.
+- It is bounded by the structural safety ceiling (`0.75`).
+- It is orthogonal to numeric token fallback ordering and DOES NOT participate in the `short <= medium <= long` constraint.
+- The numeric repeated-pattern discount DOES NOT apply to exact full-reference identity evidence (even if the normalized exact reference happens to be entirely numeric, like `000000`).
+
+**Accepted Limitation**: Generic out-of-profile exact identities (e.g. `CREDITNOTE`) and structurally specific out-of-profile exact identities (e.g. `INV874219`) receive the same fallback magnitude in v0.1. We accept this because normalized-reference length, digit diversity, periodicity, or generic-string heuristics are not empirically validated measures of full-reference discriminativeness. The corpus profile remains the authoritative mechanism for reducing common exact identities when statistics are available.
