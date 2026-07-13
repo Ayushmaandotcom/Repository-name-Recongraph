@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 
 from recongraph.matching.scoring import SignalName
@@ -57,3 +58,66 @@ def analyze_purchase_gst_semantics(
         )
 
     return tuple(findings)
+
+
+class OneToOneEligibility(StrEnum):
+    ELIGIBLE = "eligible"
+    INELIGIBLE = "ineligible"
+
+
+@dataclass(frozen=True)
+class EligibilityResult:
+    status: OneToOneEligibility
+    blocking_findings: tuple[SemanticFinding, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            self.status is OneToOneEligibility.ELIGIBLE
+            and self.blocking_findings
+        ):
+            raise ValueError(
+                "eligible result cannot contain blocking findings"
+            )
+
+        if (
+            self.status is OneToOneEligibility.INELIGIBLE
+            and not self.blocking_findings
+        ):
+            raise ValueError(
+                "ineligible result must contain at least one blocking finding"
+            )
+
+
+ONE_TO_ONE_BLOCKING_FINDINGS = frozenset(
+    {
+        SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+        SemanticFinding.TAX_IDENTITY_CONFLICT,
+        SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+    }
+)
+
+
+def evaluate_purchase_gst_one_to_one_eligibility(
+    findings: tuple[SemanticFinding, ...],
+) -> EligibilityResult:
+    blocking_findings_list: list[SemanticFinding] = []
+
+    for finding in findings:
+        if (
+            finding in ONE_TO_ONE_BLOCKING_FINDINGS
+            and finding not in blocking_findings_list
+        ):
+            blocking_findings_list.append(finding)
+
+    blocking_findings = tuple(blocking_findings_list)
+
+    status = (
+        OneToOneEligibility.INELIGIBLE
+        if blocking_findings
+        else OneToOneEligibility.ELIGIBLE
+    )
+
+    return EligibilityResult(
+        status=status,
+        blocking_findings=blocking_findings,
+    )

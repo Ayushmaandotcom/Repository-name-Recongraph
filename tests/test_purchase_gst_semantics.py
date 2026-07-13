@@ -1,8 +1,12 @@
 import pytest
 
 from recongraph.matching.purchase_gst_semantics import (
+    EligibilityResult,
+    OneToOneEligibility,
     SemanticFinding,
+    ONE_TO_ONE_BLOCKING_FINDINGS,
     analyze_purchase_gst_semantics,
+    evaluate_purchase_gst_one_to_one_eligibility,
 )
 from recongraph.matching.scoring import SignalName
 
@@ -340,3 +344,115 @@ def test_analyze_purchase_gst_semantics_rejects_missing_evidence_keys(
 
     with pytest.raises(KeyError):
         analyze_purchase_gst_semantics(evidence)
+
+
+# Eligibility tests
+def test_one_to_one_eligibility_is_eligible_without_findings():
+    result = evaluate_purchase_gst_one_to_one_eligibility(())
+
+    assert result == EligibilityResult(
+        status=OneToOneEligibility.ELIGIBLE,
+        blocking_findings=(),
+    )
+
+
+def test_severe_amount_conflict_blocks_one_to_one_eligibility():
+    result = evaluate_purchase_gst_one_to_one_eligibility(
+        (
+            SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+        )
+    )
+
+    assert result == EligibilityResult(
+        status=OneToOneEligibility.INELIGIBLE,
+        blocking_findings=(
+            SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+        ),
+    )
+
+
+def test_tax_identity_conflict_blocks_one_to_one_eligibility():
+    result = evaluate_purchase_gst_one_to_one_eligibility(
+        (
+            SemanticFinding.TAX_IDENTITY_CONFLICT,
+        )
+    )
+
+    assert result == EligibilityResult(
+        status=OneToOneEligibility.INELIGIBLE,
+        blocking_findings=(
+            SemanticFinding.TAX_IDENTITY_CONFLICT,
+        ),
+    )
+
+
+def test_distinct_event_identity_evidence_blocks_one_to_one_eligibility():
+    result = evaluate_purchase_gst_one_to_one_eligibility(
+        (
+            SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+        )
+    )
+
+    assert result == EligibilityResult(
+        status=OneToOneEligibility.INELIGIBLE,
+        blocking_findings=(
+            SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+        ),
+    )
+
+
+def test_one_to_one_eligibility_preserves_multiple_blocking_findings():
+    findings = (
+        SemanticFinding.TAX_IDENTITY_CONFLICT,
+        SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+    )
+
+    result = evaluate_purchase_gst_one_to_one_eligibility(
+        findings
+    )
+
+    assert result == EligibilityResult(
+        status=OneToOneEligibility.INELIGIBLE,
+        blocking_findings=findings,
+    )
+
+
+def test_one_to_one_blocking_findings_are_explicit():
+    assert ONE_TO_ONE_BLOCKING_FINDINGS == frozenset(
+        {
+            SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+            SemanticFinding.TAX_IDENTITY_CONFLICT,
+            SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+        }
+    )
+
+
+def test_one_to_one_eligibility_deduplicates_blocking_findings():
+    result = evaluate_purchase_gst_one_to_one_eligibility(
+        (
+            SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+            SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+        )
+    )
+
+    assert result.blocking_findings == (
+        SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+    )
+
+
+def test_eligibility_result_rejects_eligible_status_with_blocking_findings():
+    with pytest.raises(ValueError):
+        EligibilityResult(
+            status=OneToOneEligibility.ELIGIBLE,
+            blocking_findings=(
+                SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+            ),
+        )
+
+
+def test_eligibility_result_rejects_ineligible_status_without_blocking_findings():
+    with pytest.raises(ValueError):
+        EligibilityResult(
+            status=OneToOneEligibility.INELIGIBLE,
+            blocking_findings=(),
+        )

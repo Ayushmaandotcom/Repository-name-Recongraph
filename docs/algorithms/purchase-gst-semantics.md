@@ -145,3 +145,107 @@ These thresholds are rule semantics, not calibrated probabilities.
 The severe amount conflict currently requires an amount score exactly
 equal to 0.0. This preserves the first challenge-derived rule without
 introducing an untested near-zero threshold.
+
+## Compatibility and eligibility
+
+Compatibility and eligibility answer different questions.
+
+Compatibility measures how strongly the available evidence aligns across
+the weighted primitive signals.
+
+Eligibility determines whether a relationship hypothesis is permitted to
+proceed through an automatic reconciliation path.
+
+A pair may have high compatibility while remaining ineligible for
+automatic 1:1 reconciliation because a critical semantic finding
+contradicts the 1:1 hypothesis.
+
+For example, HN001 has high identity compatibility but contains a severe
+amount conflict. Reducing the compatibility score until the pair appears
+"dissimilar" would hide the actual evidence structure. The compatibility
+score should preserve the observed alignment, while eligibility records
+that the pair cannot automatically reconcile under the 1:1 hypothesis.
+
+Ineligibility does not imply rejection. A later decision layer may route
+an ineligible but otherwise compatible pair to review or evaluate it
+under a different relationship hypothesis.
+
+## Hypothesis-relative semantics
+
+Semantic findings are interpreted relative to the relationship
+hypothesis being evaluated.
+
+A severe amount conflict is a blocking condition for a 1:1 Purchase ↔
+GST hypothesis because one record is expected to reconcile directly
+with one opposing record.
+
+The same pair may remain useful as a candidate edge for a 1:N
+reconciliation hypothesis. Under a group hypothesis, amount compatibility
+must be evaluated across the combined records rather than independently
+for each pair.
+
+Therefore, ineligibility for the 1:1 hypothesis does not make a pair
+globally irrelevant.
+
+## Initial 1:1 blocking findings
+
+The first Purchase ↔ GST 1:1 eligibility policy treats the following
+semantic findings as blocking:
+
+- `severe_amount_conflict`
+- `tax_identity_conflict`
+- `distinct_event_identity_evidence`
+
+These findings prevent automatic 1:1 eligibility.
+
+The blocking set is explicit rather than treating every semantic finding
+as blocking. Future findings may be informational or review-oriented and
+should not automatically make a pair ineligible.
+
+## Decision layer boundary
+
+Eligibility is not a final reconciliation decision.
+
+The semantic and eligibility layers do not currently emit:
+
+- auto-match
+- review
+- reject
+
+A future decision layer may combine compatibility, coverage, eligibility,
+and relationship hypotheses to select an operational action.
+
+## 1:1 eligibility result
+
+The Purchase ↔ GST semantic layer exposes a separate eligibility result
+for the 1:1 reconciliation hypothesis.
+
+The result contains:
+
+- `status`: `eligible` or `ineligible`
+- `blocking_findings`: the ordered semantic findings that prevent the
+  1:1 hypothesis from proceeding through automatic reconciliation
+
+Eligibility is intentionally independent from compatibility thresholds.
+
+A low-compatibility pair may remain eligible if no critical semantic
+finding blocks the 1:1 hypothesis. A later decision layer should reject
+or ignore the pair based on compatibility.
+
+A high-compatibility pair may be ineligible when a critical contradiction
+blocks automatic 1:1 reconciliation.
+
+This independence prevents eligibility from becoming a second hidden
+score threshold.
+
+## Current implementation boundary
+
+The existing tax identity contradiction penalty remains part of the
+compatibility scorer temporarily.
+
+The intended direction is to evaluate whether the penalty should be
+removed after eligibility behaviour is validated against challenge and
+baseline datasets.
+
+No compatibility scoring behaviour is changed in the initial eligibility
+implementation.

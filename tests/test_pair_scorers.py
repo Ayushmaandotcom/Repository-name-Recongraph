@@ -10,7 +10,11 @@ from recongraph.matching.pair_scorers import (
     score_purchase_to_gst,
 )
 from recongraph.matching.scoring import RelationshipScore, SignalName
-from recongraph.matching.purchase_gst_semantics import SemanticFinding
+from recongraph.matching.purchase_gst_semantics import (
+    SemanticFinding,
+    OneToOneEligibility,
+    EligibilityResult,
+)
 
 
 def test_purchase_record_preserves_financial_fields() -> None:
@@ -86,6 +90,10 @@ def test_pair_scoring_result_preserves_signal_explanation() -> None:
             SignalName.TAX_IDENTITY: 1.0,
         },
         semantic_findings=(),
+        eligibility=EligibilityResult(
+            status=OneToOneEligibility.ELIGIBLE,
+            blocking_findings=(),
+        ),
         relationship=relationship,
     )
 
@@ -99,6 +107,10 @@ def test_pair_scoring_result_is_immutable() -> None:
     result = PairScoringResult(
         signals={},
         semantic_findings=(),
+        eligibility=EligibilityResult(
+            status=OneToOneEligibility.ELIGIBLE,
+            blocking_findings=(),
+        ),
         relationship=RelationshipScore(
             score=None,
             base_score=None,
@@ -152,6 +164,12 @@ def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
 
     assert result.semantic_findings == ()
 
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.ELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == ()
+
     assert result.relationship.score == pytest.approx(
         0.9457142857142857
     )
@@ -190,6 +208,14 @@ def test_score_purchase_to_gst_exposes_severe_amount_conflict() -> None:
     assert result.semantic_findings == (
         SemanticFinding.SEVERE_AMOUNT_CONFLICT,
     )
+
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.INELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == (
+        SemanticFinding.SEVERE_AMOUNT_CONFLICT,
+    )
     
     assert result.relationship.score == pytest.approx(
         0.6957142857142857
@@ -221,6 +247,14 @@ def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
     assert result.semantic_findings == (
         SemanticFinding.TAX_IDENTITY_CONFLICT,
     )
+
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.INELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == (
+        SemanticFinding.TAX_IDENTITY_CONFLICT,
+    )
     
     assert result.relationship.score == pytest.approx(
         0.34785714285714286
@@ -250,6 +284,14 @@ def test_score_purchase_to_gst_exposes_distinct_event_identity_evidence() -> Non
     )
 
     assert result.semantic_findings == (
+        SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+    )
+
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.INELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == (
         SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
     )
     
@@ -384,4 +426,66 @@ def test_score_purchase_to_gst_returns_pair_scoring_result() -> None:
 
     assert isinstance(result, PairScoringResult)
     assert set(result.signals) == set(PURCHASE_TO_GST_POLICY.weights)
+
+
+def test_low_compatibility_pair_can_remain_one_to_one_eligible() -> None:
+    purchase = PurchaseRecord(
+        vendor_name="ABC",
+        reference="INV-1",
+        amount=100.0,
+        record_date=date(2026, 6, 1),
+        tax_identity=None,
+    )
+
+    gst_record = GSTRecord(
+        vendor_name="XYZ",
+        reference="INV-999",
+        amount=500.0,
+        record_date=date(2026, 6, 1),
+        tax_identity=None,
+    )
+
+    result = score_purchase_to_gst(
+        purchase=purchase,
+        gst_record=gst_record,
+    )
+
+    assert result.relationship.score < 0.5
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.ELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == ()
+
+
+def test_high_compatibility_pair_can_be_ineligible() -> None:
+    purchase = PurchaseRecord(
+        vendor_name="CloudLedger Software Private Limited",
+        reference="CL-JUN-2026",
+        amount=25000.0,
+        record_date=date(2026, 6, 5),
+        tax_identity="07CLOUD1234A1Z1",
+    )
+
+    gst_record = GSTRecord(
+        vendor_name="CLOUDLEDGER SOFTWARE PVT LTD",
+        reference="CL-JUL-2026",
+        amount=25000.0,
+        record_date=date(2026, 7, 5),
+        tax_identity="07CLOUD1234A1Z1",
+    )
+
+    result = score_purchase_to_gst(
+        purchase=purchase,
+        gst_record=gst_record,
+    )
+
+    assert result.relationship.score >= 0.7
+    assert (
+        result.eligibility.status
+        is OneToOneEligibility.INELIGIBLE
+    )
+    assert result.eligibility.blocking_findings == (
+        SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+    )
 

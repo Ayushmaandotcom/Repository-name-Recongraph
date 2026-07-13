@@ -44,6 +44,8 @@ class ChallengeResult:
     temporal_score: float | None
     tax_identity_score: float | None
     semantic_findings: tuple[str, ...]
+    eligibility_status: str
+    blocking_findings: tuple[str, ...]
 
 
 def optional_text(value: str) -> str | None:
@@ -140,6 +142,8 @@ def evaluate_challenges(
                 temporal_score=signals[SignalName.TEMPORAL],
                 tax_identity_score=signals[SignalName.TAX_IDENTITY],
                 semantic_findings=findings,
+                eligibility_status=pair_result.eligibility.status.value,
+                blocking_findings=tuple(f.value for f in pair_result.eligibility.blocking_findings),
             )
         )
 
@@ -165,6 +169,7 @@ def print_score_table(results: list[ChallengeResult]) -> None:
         f"{'Pair':<14} "
         f"{'Label':<17} "
         f"{'Score':>7}  "
+        f"{'Eligibility':<11}  "
         f"{'Entity':>7}  "
         f"{'Ref':>7}  "
         f"{'Amount':>7}  "
@@ -181,6 +186,7 @@ def print_score_table(results: list[ChallengeResult]) -> None:
             f"{pair_str:<14} "
             f"{r.expected_label:<17} "
             f"{format_score(r.score):>7}  "
+            f"{r.eligibility_status:<11}  "
             f"{format_score(r.entity_score):>7}  "
             f"{format_score(r.reference_score):>7}  "
             f"{format_score(r.amount_score):>7}  "
@@ -205,6 +211,21 @@ def print_baseline_concerns(results: list[ChallengeResult]) -> None:
             print(f"{r.case_id} {pair_str} score={r.score:.4f}")
 
 
+def print_eligibility_summary(results: list[ChallengeResult]) -> None:
+    eligible_pairs = [r for r in results if r.eligibility_status == "eligible"]
+    ineligible_pairs = [r for r in results if r.eligibility_status == "ineligible"]
+
+    print("\n1:1 eligibility summary")
+    print("-----------------------")
+    print(f"Eligible pairs: {len(eligible_pairs)}")
+    print(f"Ineligible pairs: {len(ineligible_pairs)}")
+
+    for r in ineligible_pairs:
+        pair_str = f"{r.purchase_record_id}-{r.gst_record_id}"
+        blockers_str = ",".join(r.blocking_findings)
+        print(f"{r.case_id} {pair_str} blockers={blockers_str}")
+
+
 def main() -> None:
     purchases = load_purchases(PURCHASES_PATH)
     gst_records = load_gst_records(GST_RECORDS_PATH)
@@ -218,6 +239,7 @@ def main() -> None:
 
     print_score_table(results)
     print_baseline_concerns(results)
+    print_eligibility_summary(results)
 
 
 if __name__ == "__main__":

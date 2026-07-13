@@ -17,7 +17,9 @@ from recongraph.matching.signals import (
 )
 from recongraph.matching.purchase_gst_semantics import (
     SemanticFinding,
+    EligibilityResult,
     analyze_purchase_gst_semantics,
+    evaluate_purchase_gst_one_to_one_eligibility,
 )
 
 
@@ -44,6 +46,7 @@ class PairScoringResult:
 
     signals: Mapping[SignalName, float | None]
     semantic_findings: tuple[SemanticFinding, ...]
+    eligibility: EligibilityResult
     relationship: RelationshipScore
 
 
@@ -76,8 +79,12 @@ def score_purchase_to_gst(
         ),
     }
 
-    semantic_findings = analyze_purchase_gst_semantics(signals)
-
+    semantic_findings = analyze_purchase_gst_semantics(
+        signals
+    )
+    eligibility = evaluate_purchase_gst_one_to_one_eligibility(
+        semantic_findings
+    )
     relationship = calculate_relationship_score(
         signals=signals,
         policy=PURCHASE_TO_GST_POLICY,
@@ -86,5 +93,6 @@ def score_purchase_to_gst(
     return PairScoringResult(
         signals=signals,
         semantic_findings=semantic_findings,
+        eligibility=eligibility,
         relationship=relationship,
     )

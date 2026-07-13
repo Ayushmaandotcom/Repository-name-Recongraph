@@ -44,6 +44,7 @@ class EvaluationRow:
     relationship: str
     score: float | None
     coverage: float
+    eligibility: str
 
 
 def optional_text(value: str) -> str | None:
@@ -147,6 +148,7 @@ def evaluate_pairs(
                     relationship=relationship,
                     score=result.relationship.score,
                     coverage=result.relationship.coverage,
+                    eligibility=result.eligibility.status.value,
                 )
             )
 
@@ -166,10 +168,11 @@ def print_score_table(rows: list[EvaluationRow]) -> None:
         f"{'GST':<10} "
         f"{'Label':<10} "
         f"{'Score':>10} "
-        f"{'Coverage':>10}"
+        f"{'Coverage':>10} "
+        f"{'Eligibility':<11}"
     )
 
-    print("-" * 56)
+    print("-" * 68)
 
     for row in rows:
         score_text = (
@@ -183,7 +186,8 @@ def print_score_table(rows: list[EvaluationRow]) -> None:
             f"{row.gst_record_id:<10} "
             f"{row.relationship:<10} "
             f"{score_text:>10} "
-            f"{row.coverage:>10.4f}"
+            f"{row.coverage:>10.4f} "
+            f"{row.eligibility:<11}"
         )
 
 
