@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Any
+from enum import Enum
 from recongraph.graph.candidate import NodeID, CandidateGraph
 
 @dataclass(frozen=True)
@@ -28,3 +29,21 @@ class Hypothesis:
     @property
     def unmatched_nodes(self) -> frozenset[NodeID]:
         return self.component_nodes - self.matched_nodes
+
+class EligibilityStatus(Enum):
+    ELIGIBLE = "eligible"
+    INELIGIBLE = "ineligible"
+    REQUIRES_REVIEW = "requires_review"
+
+@dataclass(frozen=True)
+class EvaluatedHypothesis:
+    """
+    Wraps a structural claim with its resulting score, eligibility, 
+    and the exact evidence that justifies it.
+    """
+    hypothesis: Hypothesis
+    score: float
+    eligibility: EligibilityStatus
+    supporting_evidence: dict[str, Any]
+    violations: frozenset[str]
+
