@@ -1,0 +1,209 @@
+import re
+from dataclasses import dataclass
+
+from recongraph.normalization.text import normalize_reference
+
+@dataclass(frozen=True)
+class ReferenceIdentityEvidence:
+    normalized_a: str
+    normalized_b: str
+    exact_normalized_match: bool
+    shared_numeric_tokens: tuple[str, ...]
+
+def _extract_numeric_tokens(reference: str) -> tuple[str, ...]:
+    return tuple(sorted(set(re.findall(r"\d+", reference))))
+
+def extract_reference_identity(
+    reference_a: str | None,
+    reference_b: str | None,
+) -> ReferenceIdentityEvidence | None:
+    if reference_a is None or not reference_a.strip():
+        return None
+    if reference_b is None or not reference_b.strip():
+        return None
+
+    normalized_a = normalize_reference(reference_a)
+    normalized_b = normalize_reference(reference_b)
+
+    if not normalized_a or not normalized_b:
+        return None
+
+    exact_match = (normalized_a == normalized_b)
+
+    tokens_a = set(_extract_numeric_tokens(reference_a))
+    tokens_b = set(_extract_numeric_tokens(reference_b))
+
+    shared_tokens = tuple(sorted(tokens_a & tokens_b))
+
+    return ReferenceIdentityEvidence(
+        normalized_a=normalized_a,
+        normalized_b=normalized_b,
+        exact_normalized_match=exact_match,
+        shared_numeric_tokens=shared_tokens,
+    )
+
+from collections import Counter
+from collections.abc import Iterable, Mapping
+from types import MappingProxyType
+
+@dataclass(frozen=True)
+class ReferenceCorpusProfile:
+    reference_count: int
+    normalized_reference_frequency: Mapping[str, int]
+    numeric_token_document_frequency: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        if self.reference_count < 0:
+            raise ValueError("reference_count must be >= 0")
+
+        sum_freq = 0
+        for k, v in self.normalized_reference_frequency.items():
+            if not k or k != normalize_reference(k):
+                raise ValueError("invalid normalized key")
+            if v < 1 or v > self.reference_count:
+                raise ValueError("invalid frequency")
+            sum_freq += v
+
+        if self.reference_count > 0 and sum_freq != self.reference_count:
+            raise ValueError("inconsistent normalized frequency sum")
+
+        for k, v in self.numeric_token_document_frequency.items():
+            if not k or not k.isdigit():
+                raise ValueError("invalid numeric token")
+            if v < 1 or v > self.reference_count:
+                raise ValueError("invalid token df")
+
+        object.__setattr__(self, "normalized_reference_frequency", MappingProxyType(dict(self.normalized_reference_frequency)))
+        object.__setattr__(self, "numeric_token_document_frequency", MappingProxyType(dict(self.numeric_token_document_frequency)))
+
+def build_reference_corpus_profile(
+    references: Iterable[str | None],
+) -> ReferenceCorpusProfile:
+    reference_count = 0
+    norm_freq: Counter[str] = Counter()
+    token_df: Counter[str] = Counter()
+
+    for reference in references:
+        if reference is None or not reference.strip():
+            continue
+
+        normalized = normalize_reference(reference)
+        if not normalized:
+            continue
+
+        reference_count += 1
+        norm_freq[normalized] += 1
+
+        unique_tokens = _extract_numeric_tokens(reference)
+        for token in unique_tokens:
+            token_df[token] += 1
+
+    return ReferenceCorpusProfile(
+        reference_count=reference_count,
+        normalized_reference_frequency=norm_freq,
+        numeric_token_document_frequency=token_df,
+    )
+
+@dataclass(frozen=True)
+class NormalizedReferenceStatistics:
+    normalized_reference: str
+    frequency: int
+
+    def __post_init__(self) -> None:
+        if not self.normalized_reference or self.normalized_reference != normalize_reference(self.normalized_reference):
+            raise ValueError("invalid normalized reference")
+        if self.frequency < 1:
+            raise ValueError("frequency must be >= 1")
+
+@dataclass(frozen=True)
+class ReferenceTokenStatistics:
+    token: str
+    document_frequency: int
+
+    def __post_init__(self) -> None:
+        if not self.token or not self.token.isdigit():
+            raise ValueError("invalid numeric token")
+        if self.document_frequency < 1:
+            raise ValueError("document_frequency must be >= 1")
+
+@dataclass(frozen=True)
+class NormalizedReferenceEvidence:
+    normalized_reference: str
+    statistics: NormalizedReferenceStatistics | None
+
+    def __post_init__(self) -> None:
+        if not self.normalized_reference or self.normalized_reference != normalize_reference(self.normalized_reference):
+            raise ValueError("invalid normalized reference")
+        if self.statistics is not None and self.statistics.normalized_reference != self.normalized_reference:
+            raise ValueError("statistics mismatch")
+
+@dataclass(frozen=True)
+class SharedNumericTokenEvidence:
+    token: str
+    statistics: ReferenceTokenStatistics | None
+
+    def __post_init__(self) -> None:
+        if not self.token or not self.token.isdigit():
+            raise ValueError("invalid numeric token")
+        if self.statistics is not None and self.statistics.token != self.token:
+            raise ValueError("statistics mismatch")
+
+@dataclass(frozen=True)
+class EnrichedReferenceEvidence:
+    identity: ReferenceIdentityEvidence
+    normalized_references: tuple[NormalizedReferenceEvidence, ...]
+    shared_numeric_tokens: tuple[SharedNumericTokenEvidence, ...]
+
+    def __post_init__(self) -> None:
+        norm_refs = [e.normalized_reference for e in self.normalized_references]
+        if norm_refs != sorted(norm_refs):
+            raise ValueError("normalized_references must be sorted")
+        if len(norm_refs) != len(set(norm_refs)):
+            raise ValueError("normalized_references must not contain duplicates")
+
+        shared_tokens = [e.token for e in self.shared_numeric_tokens]
+        if shared_tokens != sorted(shared_tokens):
+            raise ValueError("shared_numeric_tokens must be sorted")
+        if len(shared_tokens) != len(set(shared_tokens)):
+            raise ValueError("shared_numeric_tokens must not contain duplicates")
+
+        expected_norm_refs = set([self.identity.normalized_a, self.identity.normalized_b])
+        if set(norm_refs) != expected_norm_refs:
+            raise ValueError("normalized_references values do not match identity")
+
+        if set(shared_tokens) != set(self.identity.shared_numeric_tokens):
+            raise ValueError("shared_numeric_tokens values do not match identity")
+
+def enrich_reference_identity(
+    identity: ReferenceIdentityEvidence,
+    profile: ReferenceCorpusProfile,
+) -> EnrichedReferenceEvidence:
+    unique_norm_refs = sorted(list(set([identity.normalized_a, identity.normalized_b])))
+
+    norm_evidence = []
+    for ref in unique_norm_refs:
+        if ref in profile.normalized_reference_frequency:
+            stats = NormalizedReferenceStatistics(
+                normalized_reference=ref,
+                frequency=profile.normalized_reference_frequency[ref]
+            )
+        else:
+            stats = None
+        norm_evidence.append(NormalizedReferenceEvidence(normalized_reference=ref, statistics=stats))
+
+    token_evidence = []
+    for token in identity.shared_numeric_tokens:
+        if token in profile.numeric_token_document_frequency:
+            stats = ReferenceTokenStatistics(
+                token=token,
+                document_frequency=profile.numeric_token_document_frequency[token]
+            )
+        else:
+            stats = None
+        token_evidence.append(SharedNumericTokenEvidence(token=token, statistics=stats))
+
+    return EnrichedReferenceEvidence(
+        identity=identity,
+        normalized_references=tuple(norm_evidence),
+        shared_numeric_tokens=tuple(token_evidence),
+    )
