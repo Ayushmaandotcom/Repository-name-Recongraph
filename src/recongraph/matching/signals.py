@@ -3,8 +3,6 @@ from datetime import date
 from rapidfuzz import fuzz
 
 from recongraph.normalization.text import (
-    extract_numeric_reference_tokens,
-    normalize_reference,
     normalize_tax_identity,
     normalize_vendor_name,
 )
@@ -81,61 +79,6 @@ def temporal_score(
     )
 
 
-def reference_score(
-    reference_a: str | None,
-    reference_b: str | None,
-    min_numeric_token_length: int = 3,
-    shared_numeric_score: float = 0.8,
-) -> float | None:
-    """Calculate compatibility between financial references."""
-    if min_numeric_token_length <= 0:
-        raise ValueError(
-            "min_numeric_token_length must be greater than zero"
-        )
-
-    if not 0.0 <= shared_numeric_score <= 1.0:
-        raise ValueError(
-            "shared_numeric_score must be between zero and one"
-        )
-
-    if reference_a is None or reference_b is None:
-        return None
-
-    normalized_a = normalize_reference(reference_a)
-    normalized_b = normalize_reference(reference_b)
-
-    if not normalized_a or not normalized_b:
-        return None
-
-    if normalized_a == normalized_b:
-        return 1.0
-
-    numeric_tokens_a = extract_numeric_reference_tokens(
-        reference_a,
-        min_length=min_numeric_token_length,
-    )
-    numeric_tokens_b = extract_numeric_reference_tokens(
-        reference_b,
-        min_length=min_numeric_token_length,
-    )
-
-    numeric_tokens_a = {
-        token
-        for token in numeric_tokens_a
-        if not _is_year_like_token(token)
-    }
-    numeric_tokens_b = {
-        token
-        for token in numeric_tokens_b
-        if not _is_year_like_token(token)
-    }
-
-    shared_numeric_tokens = numeric_tokens_a & numeric_tokens_b
-
-    if shared_numeric_tokens:
-        return shared_numeric_score
-
-    return 0.0
 
 
 def entity_score(

@@ -7,7 +7,7 @@ from recongraph.normalization.text import (
     extract_numeric_reference_tokens,
     normalize_reference,
 )
-from recongraph.matching.signals import reference_score
+from experiments.legacy_reference import reference_score
 
 @dataclass(frozen=True)
 class CorpusReference:

@@ -1,4 +1,4 @@
-from recongraph.matching.signals import reference_score
+from experiments.legacy_reference import reference_score
 from recongraph.matching.reference_evidence import extract_reference_identity
 
 CASES = [

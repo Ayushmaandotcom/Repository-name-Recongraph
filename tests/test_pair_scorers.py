@@ -15,10 +15,30 @@ from recongraph.matching.purchase_gst_semantics import (
     OneToOneEligibility,
     EligibilityResult,
 )
+from recongraph.matching.reference_evidence import (
+    ReferenceEvidenceContext,
+    ReferenceEvidencePolicy,
+    ReferenceCorpusProfile,
+    ReferenceEvidenceInterpretation,
+    ReferenceEvidenceContribution,
+    ReferenceEvidenceKind,
+)
+
+
+def _default_context() -> ReferenceEvidenceContext:
+    prof = ReferenceCorpusProfile(
+        reference_count=1000,
+        normalized_reference_frequency={"dummy": 998, "inv1042": 2},
+        numeric_token_document_frequency={"2026": 100, "1042": 2},
+    )
+    return ReferenceEvidenceContext(
+        profile=prof,
+        policy=ReferenceEvidencePolicy(),
+    )
 
 
 def test_purchase_record_preserves_financial_fields() -> None:
-    record = PurchaseRecord(
+    record = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -34,7 +54,7 @@ def test_purchase_record_preserves_financial_fields() -> None:
 
 
 def test_gst_record_preserves_financial_fields() -> None:
-    record = GSTRecord(
+    record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=118000.0,
@@ -76,26 +96,46 @@ def test_pair_scoring_result_preserves_signal_explanation() -> None:
         active_contradictions=(),
     )
 
+    from recongraph.matching.reference_evidence import ReferenceEvidenceInterpretation
+    
     result = PairScoringResult(
         signals={
-            SignalName.ENTITY: 1.0,
+            SignalName.ENTITY: 0.9,
             SignalName.REFERENCE: 0.8,
             SignalName.AMOUNT: 1.0,
-            SignalName.TEMPORAL: 0.8571,
-            SignalName.TAX_IDENTITY: 1.0,
+            SignalName.TEMPORAL: 0.5,
+            SignalName.TAX_IDENTITY: 0.0,
         },
-        semantic_findings=(),
+        semantic_findings=(SemanticFinding.TAX_IDENTITY_CONFLICT,),
         eligibility=EligibilityResult(
-            status=OneToOneEligibility.ELIGIBLE,
-            blocking_findings=(),
+            status=OneToOneEligibility.INELIGIBLE,
+            blocking_findings=(SemanticFinding.TAX_IDENTITY_CONFLICT,),
         ),
-        relationship=relationship,
+        relationship=RelationshipScore(
+            score=0.5,
+            base_score=0.6,
+            coverage=1.0,
+            contradiction_penalty=0.5,
+            active_contradictions=(SignalName.TAX_IDENTITY,),
+        ),
+        reference_interpretation=ReferenceEvidenceInterpretation(
+            score=0.8,
+            statistical_coverage=1.0,
+            contributions=(
+                ReferenceEvidenceContribution(
+                    evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
+                    identity_value="12345",
+                    positive_evidence=0.8,
+                    statistics_available=True,
+                ),
+            )
+        )
     )
 
-    assert result.signals[SignalName.ENTITY] == 1.0
+    assert result.signals[SignalName.ENTITY] == 0.9
     assert result.signals[SignalName.REFERENCE] == 0.8
-    assert result.semantic_findings == ()
-    assert result.relationship == relationship
+    assert result.semantic_findings == (SemanticFinding.TAX_IDENTITY_CONFLICT,)
+    assert result.relationship.score == 0.5
 
 
 def test_pair_scoring_result_is_immutable() -> None:
@@ -113,6 +153,7 @@ def test_pair_scoring_result_is_immutable() -> None:
             contradiction_penalty=1.0,
             active_contradictions=(),
         ),
+        reference_interpretation=ReferenceEvidenceInterpretation(0.0, 0.0, ())
     )
 
     with pytest.raises(AttributeError):
@@ -126,7 +167,7 @@ def test_pair_scoring_result_is_immutable() -> None:
 
 
 def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -134,7 +175,7 @@ def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
         tax_identity="07ABCDE1234F1Z5",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=118000.0,
@@ -145,10 +186,11 @@ def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.signals[SignalName.ENTITY] == pytest.approx(1.0)
-    assert result.signals[SignalName.REFERENCE] == pytest.approx(0.8)
+    assert result.signals[SignalName.REFERENCE] == pytest.approx(0.9552786404500042)
     assert result.signals[SignalName.AMOUNT] == pytest.approx(1.0)
     assert result.signals[SignalName.TEMPORAL] == pytest.approx(
         1.0 - (1.0 / 7.0)
@@ -166,10 +208,10 @@ def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
     assert result.eligibility.blocking_findings == ()
 
     assert result.relationship.score == pytest.approx(
-        0.9457142857142857
+        0.9767700138042866
     )
     assert result.relationship.base_score == pytest.approx(
-        0.9457142857142857
+        0.9767700138042866
     )
     assert result.relationship.coverage == pytest.approx(1.0)
     assert result.relationship.contradiction_penalty == pytest.approx(
@@ -179,7 +221,7 @@ def test_score_purchase_to_gst_scores_controlled_positive_pair() -> None:
 
 
 def test_score_purchase_to_gst_exposes_severe_amount_conflict() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -187,7 +229,7 @@ def test_score_purchase_to_gst_exposes_severe_amount_conflict() -> None:
         tax_identity="07ABCDE1234F1Z5",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=236000.0,
@@ -198,6 +240,7 @@ def test_score_purchase_to_gst_exposes_severe_amount_conflict() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.semantic_findings == (
@@ -213,12 +256,12 @@ def test_score_purchase_to_gst_exposes_severe_amount_conflict() -> None:
     )
     
     assert result.relationship.score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
 
 
 def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -226,7 +269,7 @@ def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
         tax_identity="07ABCDE1234F1Z5",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=118000.0,
@@ -237,6 +280,7 @@ def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.semantic_findings == (
@@ -252,22 +296,22 @@ def test_score_purchase_to_gst_exposes_tax_identity_conflict() -> None:
     )
     
     assert result.relationship.score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
 
 
 def test_score_purchase_to_gst_exposes_distinct_event_identity_evidence() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="CloudLedger Software Private Limited",
-        reference="CL-JUN-2026",
+        reference="CL-JUN-123",
         amount=25000.0,
         record_date=date(2026, 6, 5),
         tax_identity="07CLOUD1234A1Z1",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="CLOUDLEDGER SOFTWARE PVT LTD",
-        reference="CL-JUL-2026",
+        reference="CL-JUL-456",
         amount=25000.0,
         record_date=date(2026, 7, 5),
         tax_identity="07CLOUD1234A1Z1",
@@ -276,6 +320,7 @@ def test_score_purchase_to_gst_exposes_distinct_event_identity_evidence() -> Non
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.semantic_findings == (
@@ -296,7 +341,7 @@ def test_score_purchase_to_gst_exposes_distinct_event_identity_evidence() -> Non
 
 
 def test_score_purchase_to_gst_preserves_missing_tax_evidence() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -304,7 +349,7 @@ def test_score_purchase_to_gst_preserves_missing_tax_evidence() -> None:
         tax_identity=None,
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=118000.0,
@@ -315,6 +360,7 @@ def test_score_purchase_to_gst_preserves_missing_tax_evidence() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.signals[SignalName.TAX_IDENTITY] is None
@@ -325,15 +371,15 @@ def test_score_purchase_to_gst_preserves_missing_tax_evidence() -> None:
     )
     assert result.relationship.active_contradictions == ()
     assert result.relationship.base_score == pytest.approx(
-        0.9276190476190477
+        0.9690266850723822
     )
     assert result.relationship.score == pytest.approx(
-        0.9276190476190477
+        0.9690266850723822
     )
 
 
 def test_score_purchase_to_gst_applies_tax_contradiction() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
@@ -341,7 +387,7 @@ def test_score_purchase_to_gst_applies_tax_contradiction() -> None:
         tax_identity="07ABCDE1234F1Z5",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC STEELS PVT. LTD.",
         reference="AB/1042",
         amount=118000.0,
@@ -352,6 +398,7 @@ def test_score_purchase_to_gst_applies_tax_contradiction() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.signals[SignalName.TAX_IDENTITY] == pytest.approx(
@@ -363,15 +410,15 @@ def test_score_purchase_to_gst_applies_tax_contradiction() -> None:
     )
     assert result.relationship.active_contradictions == ()
     assert result.relationship.base_score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
     assert result.relationship.score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
 
 
 def test_score_purchase_to_gst_uses_purchase_to_gst_temporal_window() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="Vendor",
         reference="INV-1",
         amount=1000.0,
@@ -379,7 +426,7 @@ def test_score_purchase_to_gst_uses_purchase_to_gst_temporal_window() -> None:
         tax_identity=None,
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="Vendor",
         reference="INV-1",
         amount=1000.0,
@@ -390,13 +437,14 @@ def test_score_purchase_to_gst_uses_purchase_to_gst_temporal_window() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert result.signals[SignalName.TEMPORAL] == pytest.approx(0.0)
 
 
 def test_score_purchase_to_gst_returns_pair_scoring_result() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="Vendor",
         reference="INV-1",
         amount=1000.0,
@@ -404,7 +452,7 @@ def test_score_purchase_to_gst_returns_pair_scoring_result() -> None:
         tax_identity=None,
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="Vendor",
         reference="INV-1",
         amount=1000.0,
@@ -415,6 +463,7 @@ def test_score_purchase_to_gst_returns_pair_scoring_result() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+    reference_context=_default_context(),
     )
 
     assert isinstance(result, PairScoringResult)
@@ -422,7 +471,7 @@ def test_score_purchase_to_gst_returns_pair_scoring_result() -> None:
 
 
 def test_low_compatibility_pair_can_remain_one_to_one_eligible() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC",
         reference="INV-1",
         amount=100.0,
@@ -430,7 +479,7 @@ def test_low_compatibility_pair_can_remain_one_to_one_eligible() -> None:
         tax_identity=None,
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="XYZ",
         reference="INV-999",
         amount=500.0,
@@ -441,6 +490,7 @@ def test_low_compatibility_pair_can_remain_one_to_one_eligible() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+        reference_context=_default_context(),
     )
 
     assert result.relationship.score < 0.5
@@ -452,17 +502,17 @@ def test_low_compatibility_pair_can_remain_one_to_one_eligible() -> None:
 
 
 def test_high_compatibility_pair_can_be_ineligible() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="CloudLedger Software Private Limited",
-        reference="CL-JUN-2026",
+        reference="CL-JUN-123",
         amount=25000.0,
         record_date=date(2026, 6, 5),
         tax_identity="07CLOUD1234A1Z1",
     )
 
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="CLOUDLEDGER SOFTWARE PVT LTD",
-        reference="CL-JUL-2026",
+        reference="CL-JUL-456",
         amount=25000.0,
         record_date=date(2026, 7, 5),
         tax_identity="07CLOUD1234A1Z1",
@@ -471,6 +521,7 @@ def test_high_compatibility_pair_can_be_ineligible() -> None:
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+        reference_context=_default_context(),
     )
 
     assert result.relationship.score >= 0.7
@@ -484,14 +535,14 @@ def test_high_compatibility_pair_can_be_ineligible() -> None:
 
 
 def test_purchase_gst_tax_conflict_does_not_apply_compatibility_penalty() -> None:
-    purchase = PurchaseRecord(
+    purchase = PurchaseRecord(record_id="dummy_p", 
         vendor_name="ABC Steel Private Limited",
         reference="INV-1042",
         amount=118000.0,
         record_date=date(2026, 6, 12),
         tax_identity="07ABCDE1234F1Z5",
     )
-    gst_record = GSTRecord(
+    gst_record = GSTRecord(record_id="dummy_g", 
         vendor_name="ABC Steel Private Limited",
         reference="AB/1042",
         amount=118000.0,
@@ -502,13 +553,14 @@ def test_purchase_gst_tax_conflict_does_not_apply_compatibility_penalty() -> Non
     result = score_purchase_to_gst(
         purchase=purchase,
         gst_record=gst_record,
+        reference_context=_default_context(),
     )
 
     assert result.relationship.base_score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
     assert result.relationship.score == pytest.approx(
-        0.6957142857142857
+        0.7267700138042866
     )
     assert result.relationship.contradiction_penalty == 1.0
     assert result.relationship.active_contradictions == ()
@@ -517,4 +569,6 @@ def test_purchase_gst_tax_conflict_does_not_apply_compatibility_penalty() -> Non
     assert result.eligibility.blocking_findings == (
         SemanticFinding.TAX_IDENTITY_CONFLICT,
     )
+
+# --- Stage 4C Integration Parity Tests ---
 

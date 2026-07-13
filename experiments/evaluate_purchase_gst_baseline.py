@@ -62,7 +62,7 @@ def load_purchases(path: Path) -> list[IdentifiedPurchase]:
             purchases.append(
                 IdentifiedPurchase(
                     record_id=row["record_id"],
-                    record=PurchaseRecord(
+                    record=PurchaseRecord(record_id="dummy_p", 
                         vendor_name=optional_text(row["vendor_name"]),
                         reference=optional_text(row["invoice_number"]),
                         amount=float(row["amount"]),
@@ -83,9 +83,9 @@ def load_gst_records(path: Path) -> list[IdentifiedGSTRecord]:
 
         for row in reader:
             gst_records.append(
-                IdentifiedGSTRecord(
+                IdentifiedGSTRecord(record_id="dummy_g", 
                     record_id=row["record_id"],
-                    record=GSTRecord(
+                    record=GSTRecord(record_id="dummy_g", 
                         vendor_name=optional_text(row["supplier_name"]),
                         reference=optional_text(row["invoice_number"]),
                         amount=float(row["amount"]),

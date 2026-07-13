@@ -119,3 +119,45 @@ Statistical coverage is path-dependent. Under v0.1 strongest-unit interpretation
 Non-winning contributions do not dilute coverage because they were not consumed to determine the final magnitude.
 
 When two contributions have equal positive evidence magnitude, a contribution with available corpus statistics is preferred over one using structural fallback.
+
+## Strongest-Unit Selection Contract (v0.1)
+**Status**: Frozen
+
+The strongest-contribution selection algorithm operates strictly on candidate `ReferenceEvidenceContribution` objects. It is deterministic, stable, and evaluates exact values without floating-point tolerance policies.
+
+- **SS-001**: Selection consumes `ReferenceEvidenceContribution` objects.
+- **SS-002**: Higher `positive_evidence` wins.
+- **SS-003**: `statistics_available` is used only as an exact-magnitude tie-break.
+- **SS-004**: `statistics_available` MUST NOT boost or modify `positive_evidence`.
+- **SS-005**: Complete ties (exact equal magnitude and identical `statistics_available`) preserve upstream order (first contribution wins).
+- **SS-006**: Selection is stable and deterministic.
+- **SS-007**: Selection does not aggregate contributions.
+- **SS-008**: Selection does not calculate coverage.
+- **SS-009**: Selection does not construct `ReferenceEvidenceInterpretation`.
+- **SS-010**: Selection does not make reconciliation decisions.
+- **SS-011**: Selection does not claim probability.
+- **SS-012**: Selection does not infer statistical independence.
+
+## Interpretation Assembly Contract (v0.1)
+**Status**: Frozen
+
+The assembly helper integrates strongest-unit selection into a final interpretation object. `ReferenceEvidenceInterpretation` instances are expected to be constructed via `_assemble_reference_evidence_interpretation()`. Direct construction is intended only for testing.
+
+- **IA-001**: Assembly consumes a tuple of validated `ReferenceEvidenceContribution` objects.
+- **IA-002**: Assembly MUST use `_select_strongest_reference_contribution()`.
+- **IA-003**: `score` equals selected contribution `positive_evidence`.
+- **IA-004**: v0.1 `statistical_coverage` equals 1.0 if selected contribution `statistics_available` is True, 0.0 otherwise.
+- **IA-005**: Coverage is derived from winner provenance.
+- **IA-006**: Coverage MUST NOT be average statistics availability, fraction of profiled contributions, score multiplied by provenance, corpus completeness, or profile.reference_count ratio.
+- **IA-007**: All candidate contributions remain preserved in the interpretation.
+- **IA-008**: Contribution order remains unchanged.
+- **IA-009**: Assembly does not aggregate magnitudes.
+- **IA-010**: Assembly does not recompute rarity.
+- **IA-011**: Assembly does not inspect corpus frequency.
+- **IA-012**: Assembly does not mutate contributions.
+- **IA-013**: Assembly does not make reconciliation decisions.
+- **IA-014**: Assembly does not claim probability.
+- **IA-015**: The selected contribution governs score and coverage.
+- **IA-016**: A higher-magnitude unprofiled winner produces high/greater score as defined by magnitude, and coverage=0.0.
+- **IA-017**: An exact-magnitude profiled tie winner produces same score, and coverage=1.0.
+- **IA-018**: An empty tuple of contributions is mathematically valid and represents "no positive evidence". It MUST assemble into `score=0.0`, `statistical_coverage=0.0`, and `contributions=()`. "No evidence" is not modeled as a dummy contribution unit.

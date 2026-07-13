@@ -72,7 +72,7 @@ def optional_text(value: str) -> str | None:
 
 
 def parse_purchase_record(row: dict[str, str]) -> PurchaseRecord:
-    return PurchaseRecord(
+    return PurchaseRecord(record_id="dummy_p", 
         vendor_name=optional_text(row.get("vendor_name", "")),
         reference=optional_text(row.get("invoice_number", "")),
         amount=float(row["amount"]),
@@ -82,7 +82,7 @@ def parse_purchase_record(row: dict[str, str]) -> PurchaseRecord:
 
 
 def parse_gst_record(row: dict[str, str]) -> GSTRecord:
-    return GSTRecord(
+    return GSTRecord(record_id="dummy_g", 
         vendor_name=optional_text(row.get("supplier_name", "")),
         reference=optional_text(row.get("invoice_number", "")),
         amount=float(row["amount"]),

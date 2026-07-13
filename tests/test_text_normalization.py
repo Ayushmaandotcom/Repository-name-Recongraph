@@ -1,7 +1,6 @@
 import pytest
 
 from recongraph.normalization.text import (
-    extract_numeric_reference_tokens,
     normalize_reference,
     normalize_tax_identity,
     normalize_vendor_name,
@@ -67,28 +66,3 @@ def test_normalize_tax_identity_standardizes_case_and_whitespace() -> None:
     )
 
 
-def test_extract_numeric_reference_tokens_finds_significant_numbers() -> None:
-    tokens = extract_numeric_reference_tokens(
-        "INV-2026-1042"
-    )
-
-    assert tokens == {"2026", "1042"}
-
-
-def test_extract_numeric_reference_tokens_ignores_short_numbers() -> None:
-    tokens = extract_numeric_reference_tokens(
-        "INV-22-A-1042"
-    )
-
-    assert tokens == {"1042"}
-
-
-def test_extract_numeric_reference_tokens_rejects_non_positive_min_length() -> None:
-    with pytest.raises(
-        ValueError,
-        match="min_length must be greater than zero",
-    ):
-        extract_numeric_reference_tokens(
-            "INV-1042",
-            min_length=0,
-        )

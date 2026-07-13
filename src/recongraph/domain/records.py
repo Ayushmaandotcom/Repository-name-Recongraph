@@ -6,6 +6,8 @@ from datetime import date
 class PurchaseRecord:
     """Represent purchase-side financial evidence."""
 
+    record_id: str
+
     vendor_name: str | None
     reference: str | None
     amount: float
@@ -16,6 +18,8 @@ class PurchaseRecord:
 @dataclass(frozen=True)
 class GSTRecord:
     """Represent GST-side financial evidence."""
+
+    record_id: str
 
     vendor_name: str | None
     reference: str | None

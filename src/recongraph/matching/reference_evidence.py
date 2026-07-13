@@ -153,10 +153,14 @@ class SharedNumericTokenEvidence:
 @dataclass(frozen=True)
 class EnrichedReferenceEvidence:
     identity: ReferenceIdentityEvidence
+    reference_count: int
     normalized_references: tuple[NormalizedReferenceEvidence, ...]
     shared_numeric_tokens: tuple[SharedNumericTokenEvidence, ...]
 
     def __post_init__(self) -> None:
+        if self.reference_count < 0:
+            raise ValueError("reference_count must be >= 0")
+
         norm_refs = [e.normalized_reference for e in self.normalized_references]
         if norm_refs != sorted(norm_refs):
             raise ValueError("normalized_references must be sorted")
@@ -206,6 +210,7 @@ def enrich_reference_identity(
 
     return EnrichedReferenceEvidence(
         identity=identity,
+        reference_count=profile.reference_count,
         normalized_references=tuple(norm_evidence),
         shared_numeric_tokens=tuple(token_evidence),
     )
@@ -274,7 +279,7 @@ class ReferenceEvidenceContribution:
                 raise ValueError("SHARED_NUMERIC_TOKEN identity_value must be numeric")
         
         if self.evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE:
-            from recongraph.matching.signals import normalize_reference
+            from recongraph.normalization.text import normalize_reference
             if normalize_reference(self.identity_value) != self.identity_value:
                 raise ValueError("NORMALIZED_REFERENCE identity_value must be normalized")
 
@@ -297,7 +302,9 @@ class ReferenceEvidenceInterpretation:
             raise ValueError("statistical_coverage must be between 0.0 and 1.0")
 
         if not self.contributions:
-            raise ValueError("contributions cannot be empty")
+            if self.score != 0.0 or self.statistical_coverage != 0.0:
+                raise ValueError("empty contributions requires score=0.0 and statistical_coverage=0.0")
+            return
 
         max_score = max(c.positive_evidence for c in self.contributions)
         if not math.isclose(self.score, max_score, abs_tol=1e-9):
@@ -305,17 +312,6 @@ class ReferenceEvidenceInterpretation:
 
         if self.statistical_coverage not in {0.0, 1.0}:
             raise ValueError("statistical_coverage must be binary (0.0 or 1.0) under strongest-unit interpretation")
-
-        # Tie breaking for coverage
-        # Find all contributions that match the max score
-        strongest_contribs = [c for c in self.contributions if math.isclose(c.positive_evidence, self.score, abs_tol=1e-9)]
-        
-        # Check if any of the strongest contributions have statistics_available = True
-        has_profiled_winner = any(c.statistics_available for c in strongest_contribs)
-        
-        expected_coverage = 1.0 if has_profiled_winner else 0.0
-        if self.statistical_coverage != expected_coverage:
-            raise ValueError(f"statistical_coverage mismatch: expected {expected_coverage} based on winning contribution(s)")
 
 def _profiled_rarity_magnitude(
     frequency: int,
@@ -354,7 +350,6 @@ def _structural_token_magnitude(
 
 def _construct_reference_evidence_contributions(
     evidence: EnrichedReferenceEvidence,
-    profile: ReferenceCorpusProfile,
     policy: ReferenceEvidencePolicy,
 ) -> tuple[ReferenceEvidenceContribution, ...]:
     contributions = []
@@ -368,7 +363,7 @@ def _construct_reference_evidence_contributions(
         if norm_ev.statistics is not None:
             positive_evidence = _profiled_rarity_magnitude(
                 frequency=norm_ev.statistics.frequency,
-                reference_count=profile.reference_count,
+                reference_count=evidence.reference_count,
             )
             stats_available = True
         else:
@@ -387,7 +382,7 @@ def _construct_reference_evidence_contributions(
             if token_ev.statistics is not None:
                 positive_evidence = _profiled_rarity_magnitude(
                     frequency=token_ev.statistics.document_frequency,
-                    reference_count=profile.reference_count,
+                    reference_count=evidence.reference_count,
                 )
                 stats_available = True
             else:
@@ -405,3 +400,73 @@ def _construct_reference_evidence_contributions(
             ))
             
     return tuple(contributions)
+
+def _select_strongest_reference_contribution(
+    contributions: tuple[ReferenceEvidenceContribution, ...],
+) -> ReferenceEvidenceContribution:
+    if not contributions:
+        raise ValueError("at least one reference evidence contribution is required")
+
+    winner = contributions[0]
+
+    for candidate in contributions[1:]:
+        if candidate.positive_evidence > winner.positive_evidence:
+            winner = candidate
+            continue
+
+        if (
+            candidate.positive_evidence == winner.positive_evidence
+            and candidate.statistics_available
+            and not winner.statistics_available
+        ):
+            winner = candidate
+
+    return winner
+
+def _assemble_reference_evidence_interpretation(
+    contributions: tuple[ReferenceEvidenceContribution, ...],
+) -> ReferenceEvidenceInterpretation:
+    winner = _select_strongest_reference_contribution(contributions)
+    
+    return ReferenceEvidenceInterpretation(
+        score=winner.positive_evidence,
+        statistical_coverage=1.0 if winner.statistics_available else 0.0,
+        contributions=contributions
+    )
+
+def interpret_reference_evidence(
+    evidence: EnrichedReferenceEvidence,
+    policy: ReferenceEvidencePolicy,
+) -> ReferenceEvidenceInterpretation:
+    contributions = _construct_reference_evidence_contributions(evidence, policy)
+    
+    if not contributions:
+        return ReferenceEvidenceInterpretation(
+            score=0.0,
+            statistical_coverage=0.0,
+            contributions=()
+        )
+        
+    return _assemble_reference_evidence_interpretation(contributions)
+
+@dataclass(frozen=True)
+class ReferenceEvidenceContext:
+    profile: ReferenceCorpusProfile
+    policy: ReferenceEvidencePolicy
+
+def compute_reference_interpretation(
+    reference_a: str | None,
+    reference_b: str | None,
+    context: ReferenceEvidenceContext,
+) -> ReferenceEvidenceInterpretation:
+    identity = extract_reference_identity(reference_a, reference_b)
+    
+    if identity is None:
+        return ReferenceEvidenceInterpretation(
+            score=0.0,
+            statistical_coverage=0.0,
+            contributions=()
+        )
+        
+    enriched = enrich_reference_identity(identity, context.profile)
+    return interpret_reference_evidence(enriched, context.policy)

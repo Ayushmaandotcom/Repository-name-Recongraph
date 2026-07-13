@@ -61,7 +61,7 @@ def evaluate_reference_contributions():
             p = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 10, "874219": 1})
             
         enriched = enrich_reference_identity(identity, p)
-        contributions = _construct_reference_evidence_contributions(enriched, p, policy)
+        contributions = _construct_reference_evidence_contributions(enriched, policy)
         
         print(f"Contribution Count: {len(contributions)}")
         for i, contrib in enumerate(contributions):

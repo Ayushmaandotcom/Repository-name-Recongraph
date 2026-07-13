@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from recongraph.matching.signals import reference_score
+from experiments.legacy_reference import reference_score
 from recongraph.normalization.text import normalize_reference
 
 NUMERIC_TOKEN_PATTERN = re.compile(r"\d+")

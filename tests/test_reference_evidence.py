@@ -641,8 +641,8 @@ def test_reference_evidence_interpretation_validation_finiteness():
         ReferenceEvidenceInterpretation(score=0.5, statistical_coverage=float("inf"), contributions=(contrib,))
 
 def test_reference_evidence_interpretation_validation_empty_contributions():
-    with pytest.raises(ValueError):
-        ReferenceEvidenceInterpretation(score=0.0, statistical_coverage=0.0, contributions=())
+    with pytest.raises(ValueError, match="empty contributions requires score=0.0 and statistical_coverage=0.0"):
+        ReferenceEvidenceInterpretation(score=0.9, statistical_coverage=0.0, contributions=())
 
 def test_reference_evidence_interpretation_validation_score_matches_strongest():
     contrib1 = ReferenceEvidenceContribution(
@@ -680,9 +680,6 @@ def test_reference_evidence_interpretation_validation_coverage_binary():
     with pytest.raises(ValueError):
         ReferenceEvidenceInterpretation(score=0.5, statistical_coverage=0.75, contributions=(contrib,))
     
-    with pytest.raises(ValueError):
-        ReferenceEvidenceInterpretation(score=0.5, statistical_coverage=0.0, contributions=(contrib,))
-    
     # Valid
     ReferenceEvidenceInterpretation(score=0.5, statistical_coverage=1.0, contributions=(contrib,))
     
@@ -694,60 +691,6 @@ def test_reference_evidence_interpretation_validation_coverage_binary():
         statistics_available=False,
     )
     ReferenceEvidenceInterpretation(score=0.5, statistical_coverage=0.0, contributions=(contrib_unprofiled,))
-
-def test_reference_evidence_interpretation_coverage_unprofiled_winner():
-    contrib1 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="123",
-        positive_evidence=0.60,
-        statistics_available=False,
-    )
-    contrib2 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="456",
-        positive_evidence=0.55,
-        statistics_available=True,
-    )
-    with pytest.raises(ValueError):
-        ReferenceEvidenceInterpretation(score=0.60, statistical_coverage=1.0, contributions=(contrib1, contrib2))
-    interp = ReferenceEvidenceInterpretation(score=0.60, statistical_coverage=0.0, contributions=(contrib1, contrib2))
-    assert interp.statistical_coverage == 0.0
-
-def test_reference_evidence_interpretation_coverage_profiled_winner():
-    contrib1 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="123",
-        positive_evidence=0.40,
-        statistics_available=False,
-    )
-    contrib2 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="456",
-        positive_evidence=0.55,
-        statistics_available=True,
-    )
-    with pytest.raises(ValueError):
-        ReferenceEvidenceInterpretation(score=0.55, statistical_coverage=0.0, contributions=(contrib1, contrib2))
-    interp = ReferenceEvidenceInterpretation(score=0.55, statistical_coverage=1.0, contributions=(contrib1, contrib2))
-    assert interp.statistical_coverage == 1.0
-
-def test_reference_evidence_interpretation_coverage_tie():
-    contrib1 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="123",
-        positive_evidence=0.60,
-        statistics_available=False,
-    )
-    contrib2 = ReferenceEvidenceContribution(
-        evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
-        identity_value="456",
-        positive_evidence=0.60,
-        statistics_available=True,
-    )
-    with pytest.raises(ValueError):
-        ReferenceEvidenceInterpretation(score=0.60, statistical_coverage=0.0, contributions=(contrib1, contrib2))
-    interp = ReferenceEvidenceInterpretation(score=0.60, statistical_coverage=1.0, contributions=(contrib1, contrib2))
-    assert interp.statistical_coverage == 1.0
 
 def test_profiled_rarity_magnitude_f1_n1():
     assert math.isclose(_profiled_rarity_magnitude(1, 1), 0.0)
@@ -902,12 +845,7 @@ def test_structural_token_magnitude_validation():
     # 23. Decimal
         _structural_token_magnitude("1.23", policy)
 
-def _create_mock_enriched_evidence(
-    exact: bool,
-    norm_val: str,
-    norm_freq: int | None,
-    tokens: list[tuple[str, int | None]],
-) -> 'EnrichedReferenceEvidence':
+def _create_mock_enriched_evidence(exact_match: bool, norm_val: str, norm_freq: int | None, tokens: list[tuple[str, int | None]], reference_count: int = 100) -> 'EnrichedReferenceEvidence':
     from recongraph.matching.reference_evidence import (
         ReferenceIdentityEvidence, NormalizedReferenceStatistics, NormalizedReferenceEvidence,
         ReferenceTokenStatistics, SharedNumericTokenEvidence, EnrichedReferenceEvidence
@@ -915,8 +853,8 @@ def _create_mock_enriched_evidence(
     
     identity = ReferenceIdentityEvidence(
         normalized_a=norm_val,
-        normalized_b=norm_val if exact else norm_val + "diff",
-        exact_normalized_match=exact,
+        normalized_b=norm_val if exact_match else norm_val + "diff",
+        exact_normalized_match=exact_match,
         shared_numeric_tokens=tuple(t[0] for t in tokens)
     )
     
@@ -927,7 +865,7 @@ def _create_mock_enriched_evidence(
     
     # We must satisfy the invariant that normalized_references contains unique norm_refs
     norm_evs = []
-    if exact:
+    if exact_match:
         norm_evs.append(NormalizedReferenceEvidence(norm_val, n_stat))
     else:
         # If not exact, we have two different normalized values
@@ -948,6 +886,7 @@ def _create_mock_enriched_evidence(
         
     return EnrichedReferenceEvidence(
         identity=identity,
+        reference_count=reference_count,
         normalized_references=tuple(norm_evs),
         shared_numeric_tokens=tuple(tok_evs)
     )
@@ -962,7 +901,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE001: INV-874219 exact, freq=1, N=100 -> mag=0.90
     ev1 = _create_mock_enriched_evidence(True, "inv874219", 1, [])
-    c1 = _construct_reference_evidence_contributions(ev1, profile, policy)
+    c1 = _construct_reference_evidence_contributions(ev1, policy)
     assert len(c1) == 1
     assert c1[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
     assert c1[0].identity_value == "inv874219"
@@ -971,7 +910,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE002: CREDITNOTE exact, freq=100, N=100 -> mag=0.0
     ev2 = _create_mock_enriched_evidence(True, "creditnote", 100, [])
-    c2 = _construct_reference_evidence_contributions(ev2, profile, policy)
+    c2 = _construct_reference_evidence_contributions(ev2, policy)
     assert len(c2) == 1
     assert c2[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
     assert c2[0].identity_value == "creditnote"
@@ -980,7 +919,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE003: INV-999999 out-of-profile -> mag=0.60
     ev3 = _create_mock_enriched_evidence(True, "inv999999", None, [])
-    c3 = _construct_reference_evidence_contributions(ev3, profile, policy)
+    c3 = _construct_reference_evidence_contributions(ev3, policy)
     assert len(c3) == 1
     assert c3[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
     assert c3[0].identity_value == "inv999999"
@@ -989,7 +928,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE004: CREDITNOTE out-of-profile -> mag=0.60
     ev4 = _create_mock_enriched_evidence(True, "creditnote", None, [])
-    c4 = _construct_reference_evidence_contributions(ev4, profile, policy)
+    c4 = _construct_reference_evidence_contributions(ev4, policy)
     assert len(c4) == 1
     assert c4[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
     assert c4[0].identity_value == "creditnote"
@@ -998,7 +937,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE005: 000000 exact out-of-profile -> mag=0.60 (no discount)
     ev5 = _create_mock_enriched_evidence(True, "000000", None, [])
-    c5 = _construct_reference_evidence_contributions(ev5, profile, policy)
+    c5 = _construct_reference_evidence_contributions(ev5, policy)
     assert len(c5) == 1
     assert c5[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
     assert c5[0].identity_value == "000000"
@@ -1007,7 +946,7 @@ def test_construct_reference_evidence_contributions_exact():
 
     # CE006: custom exact_reference_fallback
     p2 = ReferenceEvidencePolicy(exact_reference_fallback=0.25)
-    c6 = _construct_reference_evidence_contributions(ev5, profile, p2)
+    c6 = _construct_reference_evidence_contributions(ev5, p2)
     assert math.isclose(c6[0].positive_evidence, 0.25)
 
 def test_construct_reference_evidence_contributions_tokens():
@@ -1020,7 +959,7 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE007: shared token 874219, DF=1, N=100 -> mag=0.90
     ev7 = _create_mock_enriched_evidence(False, "inv874219", None, [("874219", 1)])
-    c7 = _construct_reference_evidence_contributions(ev7, profile, policy)
+    c7 = _construct_reference_evidence_contributions(ev7, policy)
     assert len(c7) == 1
     assert c7[0].evidence_kind == ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN
     assert c7[0].identity_value == "874219"
@@ -1029,7 +968,7 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE008: shared token 001, DF=100, N=100 -> mag=0.0
     ev8 = _create_mock_enriched_evidence(False, "inv001", None, [("001", 100)])
-    c8 = _construct_reference_evidence_contributions(ev8, profile, policy)
+    c8 = _construct_reference_evidence_contributions(ev8, policy)
     assert len(c8) == 1
     assert c8[0].evidence_kind == ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN
     assert c8[0].identity_value == "001"
@@ -1038,7 +977,7 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE009: shared token 874219 out-of-profile -> mag=0.60
     ev9 = _create_mock_enriched_evidence(False, "inv874219", None, [("874219", None)])
-    c9 = _construct_reference_evidence_contributions(ev9, profile, policy)
+    c9 = _construct_reference_evidence_contributions(ev9, policy)
     assert len(c9) == 1
     assert c9[0].evidence_kind == ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN
     assert c9[0].identity_value == "874219"
@@ -1047,7 +986,7 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE010: shared token 001 out-of-profile -> mag=0.30
     ev10 = _create_mock_enriched_evidence(False, "inv001", None, [("001", None)])
-    c10 = _construct_reference_evidence_contributions(ev10, profile, policy)
+    c10 = _construct_reference_evidence_contributions(ev10, policy)
     assert len(c10) == 1
     assert c10[0].identity_value == "001"
     assert math.isclose(c10[0].positive_evidence, 0.30)
@@ -1055,7 +994,7 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE011: shared token 999999 out-of-profile -> mag=0.30 (discounted)
     ev11 = _create_mock_enriched_evidence(False, "inv999999", None, [("999999", None)])
-    c11 = _construct_reference_evidence_contributions(ev11, profile, policy)
+    c11 = _construct_reference_evidence_contributions(ev11, policy)
     assert len(c11) == 1
     assert c11[0].identity_value == "999999"
     assert math.isclose(c11[0].positive_evidence, 0.30)
@@ -1063,14 +1002,14 @@ def test_construct_reference_evidence_contributions_tokens():
 
     # CE012: shared token 121212 out-of-profile -> mag=0.60
     ev12 = _create_mock_enriched_evidence(False, "inv121212", None, [("121212", None)])
-    c12 = _construct_reference_evidence_contributions(ev12, profile, policy)
+    c12 = _construct_reference_evidence_contributions(ev12, policy)
     assert len(c12) == 1
     assert c12[0].identity_value == "121212"
     assert math.isclose(c12[0].positive_evidence, 0.60)
 
     # CE013: multiple shared tokens: 2026, 874219
     ev13 = _create_mock_enriched_evidence(False, "inv2026", None, [("2026", None), ("874219", None)])
-    c13 = _construct_reference_evidence_contributions(ev13, profile, policy)
+    c13 = _construct_reference_evidence_contributions(ev13, policy)
     assert len(c13) == 2
     assert c13[0].identity_value == "2026"
     assert c13[1].identity_value == "874219"
@@ -1087,8 +1026,8 @@ def test_construct_reference_evidence_contributions_equal_magnitude_regression()
     ev_prof = _create_mock_enriched_evidence(True, "inv1", 16, [])
     ev_unprof = _create_mock_enriched_evidence(True, "inv2", None, [])
     
-    c_prof = _construct_reference_evidence_contributions(ev_prof, profile, policy)[0]
-    c_unprof = _construct_reference_evidence_contributions(ev_unprof, profile, policy)[0]
+    c_prof = _construct_reference_evidence_contributions(ev_prof, policy)[0]
+    c_unprof = _construct_reference_evidence_contributions(ev_unprof, policy)[0]
     
     assert math.isclose(c_prof.positive_evidence, 0.60)
     assert math.isclose(c_unprof.positive_evidence, 0.60)
@@ -1107,7 +1046,7 @@ def test_construct_reference_evidence_contributions_stage_boundary():
     profile = ReferenceCorpusProfile(reference_count=100, normalized_reference_frequency={"dummy": 100}, numeric_token_document_frequency={})
     
     ev = _create_mock_enriched_evidence(False, "inv", None, [("123", None), ("456", None)])
-    out = _construct_reference_evidence_contributions(ev, profile, policy)
+    out = _construct_reference_evidence_contributions(ev, policy)
     
     # 1. return ReferenceEvidenceInterpretation (must not)
     assert isinstance(out, tuple)
@@ -1120,3 +1059,501 @@ def test_construct_reference_evidence_contributions_stage_boundary():
     assert len(out) == 2
     
     # 5/6/7. No mutation (tuples and dataclasses are frozen, safe)
+
+def test_select_strongest_reference_contribution():
+    from recongraph.matching.reference_evidence import (
+        ReferenceEvidenceContribution, ReferenceEvidenceKind,
+        _select_strongest_reference_contribution
+    )
+
+    def make_contrib(mag: float, stats: bool, kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN, val="0"):
+        return ReferenceEvidenceContribution(
+            evidence_kind=kind,
+            identity_value=val,
+            positive_evidence=mag,
+            statistics_available=stats
+        )
+
+    # SS001 — single contribution
+    c_single = make_contrib(0.90, True, val="874219")
+    w_single = _select_strongest_reference_contribution((c_single,))
+    assert w_single is c_single
+
+    # SS002 — higher magnitude wins
+    ca = make_contrib(0.60, False)
+    cb = make_contrib(0.90, False)
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is cb
+
+    # SS003 — higher magnitude wins even if unprofiled
+    ca = make_contrib(0.70, False)
+    cb = make_contrib(0.60, True)
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is ca
+
+    # SS004 — profiled wins exact magnitude tie
+    ca = make_contrib(0.60, False)
+    cb = make_contrib(0.60, True)
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is cb
+
+    # SS005 — profiled first, fallback second, exact magnitude tie
+    ca = make_contrib(0.60, True)
+    cb = make_contrib(0.60, False)
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is ca
+
+    # SS006 — complete tie preserves first contribution
+    ca = make_contrib(0.60, True, val="2026")
+    cb = make_contrib(0.60, True, val="874219")
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is ca
+
+    # SS007 — reverse complete tie preserves new first contribution
+    w2 = _select_strongest_reference_contribution((cb, ca))
+    assert w2 is cb
+
+    # SS008 — zero magnitude tie, profiled wins
+    ca = make_contrib(0.0, False)
+    cb = make_contrib(0.0, True)
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is cb
+
+    # SS009 — zero magnitude complete tie preserves first
+    ca = make_contrib(0.0, True, val="1")
+    cb = make_contrib(0.0, True, val="2")
+    w = _select_strongest_reference_contribution((ca, cb))
+    assert w is ca
+
+    # SS010 — empty tuple raises ValueError
+    import pytest
+    with pytest.raises(ValueError, match="at least one reference evidence contribution is required"):
+        _select_strongest_reference_contribution(())
+
+    # SS011 — three contributions, highest last
+    ca = make_contrib(0.30, False)
+    cb = make_contrib(0.68, True)
+    cc = make_contrib(0.90, True)
+    w = _select_strongest_reference_contribution((ca, cb, cc))
+    assert w is cc
+
+    # SS012 — three contributions, highest first
+    ca = make_contrib(0.90, True)
+    cb = make_contrib(0.68, True)
+    cc = make_contrib(0.30, False)
+    w = _select_strongest_reference_contribution((ca, cb, cc))
+    assert w is ca
+
+    # SS013 — later profiled contribution replaces equal fallback winner
+    ca = make_contrib(0.60, False)
+    cb = make_contrib(0.30, True)
+    cc = make_contrib(0.60, True)
+    w = _select_strongest_reference_contribution((ca, cb, cc))
+    assert w is cc
+
+    # SS014 — later complete tie does NOT replace first complete winner
+    ca = make_contrib(0.60, True, val="1")
+    cb = make_contrib(0.30, False)
+    cc = make_contrib(0.60, True, val="3")
+    w = _select_strongest_reference_contribution((ca, cb, cc))
+    assert w is ca
+
+def test_select_strongest_reference_contribution_identity_and_mutation():
+    from recongraph.matching.reference_evidence import (
+        ReferenceEvidenceContribution, ReferenceEvidenceKind,
+        _select_strongest_reference_contribution
+    )
+    ca = ReferenceEvidenceContribution(ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN, "1", 0.5, True)
+    cb = ReferenceEvidenceContribution(ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN, "2", 0.8, False)
+    cc = ReferenceEvidenceContribution(ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN, "3", 0.2, True)
+
+    contributions = (ca, cb, cc)
+    before_tuple = contributions
+    before_values = tuple(
+        (c.evidence_kind, c.identity_value, c.positive_evidence, c.statistics_available)
+        for c in contributions
+    )
+    
+    winner = _select_strongest_reference_contribution(contributions)
+    
+    # Assert identity preservation
+    assert any(winner is c for c in contributions)
+    assert winner is cb
+    
+    # Assert mutation boundary
+    assert contributions is before_tuple
+    assert tuple(
+        (c.evidence_kind, c.identity_value, c.positive_evidence, c.statistics_available)
+        for c in contributions
+    ) == before_values
+
+    # Prove frozen mutation is still restricted
+    import pytest
+    from dataclasses import FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
+        winner.positive_evidence = 0.99
+
+def test_select_strongest_reference_contribution_integration():
+    from recongraph.matching.reference_evidence import (
+        extract_reference_identity, build_reference_corpus_profile,
+        enrich_reference_identity, _construct_reference_evidence_contributions,
+        _select_strongest_reference_contribution, ReferenceEvidencePolicy
+    )
+    import math
+
+    policy = ReferenceEvidencePolicy()
+
+    # SI001
+    ident = extract_reference_identity("INV-2026-874219", "AB-2026-874219")
+    prof = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 10, "874219": 1})
+    enriched = enrich_reference_identity(ident, prof)
+    contribs = _construct_reference_evidence_contributions(enriched, policy)
+    winner = _select_strongest_reference_contribution(contribs)
+    
+    assert winner.identity_value == "874219"
+    assert math.isclose(winner.positive_evidence, 0.90)
+
+    # SI002: Exact exact profiled magnitude tie
+    # 2026 and 874219 both have DF=1.
+    prof2 = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 1, "874219": 1})
+    enriched2 = enrich_reference_identity(ident, prof2)
+    contribs2 = _construct_reference_evidence_contributions(enriched2, policy)
+    winner2 = _select_strongest_reference_contribution(contribs2)
+    
+    # "2026" wins because it comes first in sorted token order (upstream determinism).
+    assert winner2.identity_value == "2026"
+
+    # SI003: Unprofiled 0.60 vs Profiled 0.60
+    # 1 - sqrt(f/N) = 0.60 => sqrt(f/N) = 0.40 => f/N = 0.16. N=100 => f=16
+    ident3 = extract_reference_identity("INV-874219-999999", "AB-874219-999999")
+    # 874219 has DF=16 (profiled mag=0.60)
+    # 999999 is out-of-profile. It gets medium_fallback * repeated_discount? Wait, 999999 is len 6 -> long fallback (0.60) * 0.50 = 0.30.
+    # We want unprofiled to get 0.60, so we use a non-repeated long token: e.g. 121212.
+    ident3_alt = extract_reference_identity("INV-874219-121212", "AB-874219-121212")
+    prof3 = ReferenceCorpusProfile(100, {"dummy": 100}, {"874219": 16})
+    enriched3 = enrich_reference_identity(ident3_alt, prof3)
+    contribs3 = _construct_reference_evidence_contributions(enriched3, policy)
+    winner3 = _select_strongest_reference_contribution(contribs3)
+    
+    # 874219: profiled, 0.60
+    # 121212: unprofiled, long_token_fallback = 0.60
+    # Profiled wins!
+    assert winner3.identity_value == "874219"
+
+    # SI004: Unprofiled 0.60 vs Profiled slightly below 0.60
+    # 1 - sqrt(17/100) = 1 - 0.4123 = 0.5877
+    prof4 = ReferenceCorpusProfile(100, {"dummy": 100}, {"874219": 17})
+    enriched4 = enrich_reference_identity(ident3_alt, prof4)
+    contribs4 = _construct_reference_evidence_contributions(enriched4, policy)
+    winner4 = _select_strongest_reference_contribution(contribs4)
+    
+    # 121212 unprofiled 0.60 wins because magnitude overrides provenance.
+    assert winner4.identity_value == "121212"
+
+
+def test_assemble_reference_evidence_interpretation():
+    from recongraph.matching.reference_evidence import (
+        ReferenceEvidenceContribution, ReferenceEvidenceKind,
+        _assemble_reference_evidence_interpretation
+    )
+
+    def make_contrib(mag, stats, val="1"):
+        return ReferenceEvidenceContribution(
+            evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
+            identity_value=val,
+            positive_evidence=mag,
+            statistics_available=stats
+        )
+
+    # IA001 — single profiled contribution
+    c = make_contrib(0.90, True)
+    interp = _assemble_reference_evidence_interpretation((c,))
+    assert interp.score == 0.90
+    assert interp.statistical_coverage == 1.0
+    assert interp.contributions == (c,)
+
+    # IA002 — single fallback contribution
+    c2 = make_contrib(0.60, False)
+    interp2 = _assemble_reference_evidence_interpretation((c2,))
+    assert interp2.score == 0.60
+    assert interp2.statistical_coverage == 0.0
+
+    # IA003 — profiled wins exact magnitude tie
+    ca = make_contrib(0.60, False, val="1")
+    cb = make_contrib(0.60, True, val="2")
+    interp3 = _assemble_reference_evidence_interpretation((ca, cb))
+    assert interp3.score == 0.60
+    assert interp3.statistical_coverage == 1.0
+
+    # IA004 — higher unprofiled magnitude wins
+    ca = make_contrib(0.70, False, val="1")
+    cb = make_contrib(0.60, True, val="2")
+    interp4 = _assemble_reference_evidence_interpretation((ca, cb))
+    assert interp4.score == 0.70
+    assert interp4.statistical_coverage == 0.0
+
+    # IA005 — highest profiled contribution wins
+    ca = make_contrib(0.30, False, val="1")
+    cb = make_contrib(0.68, True, val="2")
+    cc = make_contrib(0.90, True, val="3")
+    interp5 = _assemble_reference_evidence_interpretation((ca, cb, cc))
+    assert interp5.score == 0.90
+    assert interp5.statistical_coverage == 1.0
+
+    # IA006 — highest fallback contribution wins
+    ca = make_contrib(0.30, True, val="1")
+    cb = make_contrib(0.68, True, val="2")
+    cc = make_contrib(0.90, False, val="3")
+    interp6 = _assemble_reference_evidence_interpretation((ca, cb, cc))
+    assert interp6.score == 0.90
+    assert interp6.statistical_coverage == 0.0
+
+    # IA007 — zero magnitude profiled tie winner
+    ca = make_contrib(0.0, False, val="1")
+    cb = make_contrib(0.0, True, val="2")
+    interp7 = _assemble_reference_evidence_interpretation((ca, cb))
+    assert interp7.score == 0.0
+    assert interp7.statistical_coverage == 1.0
+
+    # IA008 — complete tie preserves selector winner
+    ca = make_contrib(0.60, True, val="2026")
+    cb = make_contrib(0.60, True, val="874219")
+    interp8 = _assemble_reference_evidence_interpretation((ca, cb))
+    assert interp8.score == 0.60
+    assert interp8.statistical_coverage == 1.0
+
+    # IA009 — reversed complete tie
+    interp9 = _assemble_reference_evidence_interpretation((cb, ca))
+    assert interp9.score == 0.60
+    assert interp9.statistical_coverage == 1.0
+
+    # IA010 — contribution tuple identity/order preserved
+    tup = (ca, cb)
+    interp10 = _assemble_reference_evidence_interpretation(tup)
+    assert interp10.contributions == tup
+    assert interp10.contributions is tup
+
+    # IA011 — empty contributions raises ValueError
+    import pytest
+    with pytest.raises(ValueError):
+        _assemble_reference_evidence_interpretation(())
+
+    # IA012/IA013/IA014 implicitly tested by IA003/IA004 bounds
+
+import pytest
+@pytest.mark.parametrize("magnitude, stats, expected_score, expected_coverage", [
+    (0.00, False, 0.00, 0.0),
+    (0.00, True,  0.00, 1.0),
+    (0.30, False, 0.30, 0.0),
+    (0.30, True,  0.30, 1.0),
+    (0.60, False, 0.60, 0.0),
+    (0.60, True,  0.60, 1.0),
+    (0.90, False, 0.90, 0.0),
+    (0.90, True,  0.90, 1.0),
+])
+def test_assemble_reference_evidence_coverage_truth_table(magnitude, stats, expected_score, expected_coverage):
+    from recongraph.matching.reference_evidence import (
+        ReferenceEvidenceContribution, ReferenceEvidenceKind,
+        _assemble_reference_evidence_interpretation
+    )
+    c = ReferenceEvidenceContribution(ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN, "1", magnitude, stats)
+    interp = _assemble_reference_evidence_interpretation((c,))
+    assert interp.score == expected_score
+    assert interp.statistical_coverage == expected_coverage
+
+def test_assemble_reference_evidence_integration():
+    from recongraph.matching.reference_evidence import (
+        extract_reference_identity, build_reference_corpus_profile,
+        enrich_reference_identity, _construct_reference_evidence_contributions,
+        _assemble_reference_evidence_interpretation, ReferenceEvidencePolicy,
+        ReferenceEvidenceKind
+    )
+    import math
+    policy = ReferenceEvidencePolicy()
+
+    # AI001 — rare exact profiled identity
+    prof = ReferenceCorpusProfile(100, {"dummy": 99, "inv874219": 1}, {})
+    enriched = enrich_reference_identity(extract_reference_identity("INV-874219", "INV/874219"), prof)
+    contribs = _construct_reference_evidence_contributions(enriched, policy)
+    interp = _assemble_reference_evidence_interpretation(contribs)
+    assert len(interp.contributions) == 1
+    assert interp.contributions[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
+    assert math.isclose(interp.score, 0.90)
+    assert interp.statistical_coverage == 1.0
+
+    # AI002 — ubiquitous exact profiled identity (CREDITNOTE)
+    prof2 = ReferenceCorpusProfile(100, {"creditnote": 100}, {})
+    enriched2 = enrich_reference_identity(extract_reference_identity("CREDIT NOTE", "creditnote"), prof2)
+    contribs2 = _construct_reference_evidence_contributions(enriched2, policy)
+    interp2 = _assemble_reference_evidence_interpretation(contribs2)
+    assert interp2.score == 0.0
+    assert interp2.statistical_coverage == 1.0
+
+    # AI003 — out-of-profile exact identity
+    prof3 = ReferenceCorpusProfile(100, {"dummy": 100}, {})
+    enriched3 = enrich_reference_identity(extract_reference_identity("INV-999999", "INV/999999"), prof3)
+    contribs3 = _construct_reference_evidence_contributions(enriched3, policy)
+    interp3 = _assemble_reference_evidence_interpretation(contribs3)
+    assert interp3.score == policy.exact_reference_fallback
+    assert interp3.statistical_coverage == 0.0
+
+    # AI004 — rare shared token
+    prof4 = ReferenceCorpusProfile(100, {"dummy": 100}, {"874219": 1})
+    enriched4 = enrich_reference_identity(extract_reference_identity("INV-874219", "AB-874219"), prof4)
+    contribs4 = _construct_reference_evidence_contributions(enriched4, policy)
+    interp4 = _assemble_reference_evidence_interpretation(contribs4)
+    assert math.isclose(interp4.score, 0.90)
+    assert interp4.statistical_coverage == 1.0
+
+    # AI005 — common shared token
+    prof5 = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 36})
+    enriched5 = enrich_reference_identity(extract_reference_identity("INV-2026", "AB-2026"), prof5)
+    contribs5 = _construct_reference_evidence_contributions(enriched5, policy)
+    interp5 = _assemble_reference_evidence_interpretation(contribs5)
+    # 1 - sqrt(36/100) = 1 - 0.6 = 0.40
+    assert math.isclose(interp5.score, 0.40)
+    assert interp5.statistical_coverage == 1.0
+
+    # AI006 — out-of-profile long token
+    prof6 = ReferenceCorpusProfile(100, {"dummy": 100}, {})
+    enriched6 = enrich_reference_identity(extract_reference_identity("INV-121212", "AB-121212"), prof6)
+    contribs6 = _construct_reference_evidence_contributions(enriched6, policy)
+    interp6 = _assemble_reference_evidence_interpretation(contribs6)
+    assert interp6.score == policy.long_token_fallback
+    assert interp6.statistical_coverage == 0.0
+
+    # AI007 — out-of-profile repeated long token
+    prof7 = ReferenceCorpusProfile(100, {"dummy": 100}, {})
+    enriched7 = enrich_reference_identity(extract_reference_identity("INV-999999", "AB-999999"), prof7)
+    contribs7 = _construct_reference_evidence_contributions(enriched7, policy)
+    interp7 = _assemble_reference_evidence_interpretation(contribs7)
+    assert interp7.score == policy.long_token_fallback * policy.repeated_pattern_discount
+    assert interp7.statistical_coverage == 0.0
+
+    # AI008 — mixed tokens, rare profiled token wins
+    prof8 = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 36, "874219": 1})
+    enriched8 = enrich_reference_identity(extract_reference_identity("INV-2026-874219", "AB-2026-874219"), prof8)
+    contribs8 = _construct_reference_evidence_contributions(enriched8, policy)
+    interp8 = _assemble_reference_evidence_interpretation(contribs8)
+    assert math.isclose(interp8.score, 0.90)
+    assert interp8.statistical_coverage == 1.0
+
+    # AI009 — mixed tokens, stronger fallback wins
+    # 2026 (len 4) -> medium fallback (0.3)
+    # 121212 (len 6) -> long fallback (0.6)
+    prof9 = ReferenceCorpusProfile(100, {"dummy": 100}, {})
+    enriched9 = enrich_reference_identity(extract_reference_identity("INV-2026-121212", "AB-2026-121212"), prof9)
+    contribs9 = _construct_reference_evidence_contributions(enriched9, policy)
+    interp9 = _assemble_reference_evidence_interpretation(contribs9)
+    assert interp9.score == 0.60
+    assert interp9.statistical_coverage == 0.0
+
+    # AI010 — exact identity bypasses token path
+    prof10 = ReferenceCorpusProfile(100, {"dummy": 99, "inv2026874219": 1}, {"2026": 10, "874219": 1})
+    enriched10 = enrich_reference_identity(extract_reference_identity("INV-2026-874219", "INV/2026/874219"), prof10)
+    contribs10 = _construct_reference_evidence_contributions(enriched10, policy)
+    interp10 = _assemble_reference_evidence_interpretation(contribs10)
+    assert len(interp10.contributions) == 1
+    assert interp10.contributions[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
+
+
+def test_interpret_reference_evidence_public_api():
+    from recongraph.matching.reference_evidence import (
+        interpret_reference_evidence, ReferenceEvidencePolicy, ReferenceCorpusProfile,
+        extract_reference_identity, enrich_reference_identity, ReferenceEvidenceKind
+    )
+    import math
+    policy = ReferenceEvidencePolicy()
+    prof = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 10, "874219": 1})
+
+    # Case 1: Valid enriched evidence with tokens
+    ev1 = enrich_reference_identity(extract_reference_identity("INV-2026-874219", "AB-2026-874219"), prof)
+    interp1 = interpret_reference_evidence(ev1, policy)
+    assert math.isclose(interp1.score, 0.90)
+    assert interp1.statistical_coverage == 1.0
+    assert len(interp1.contributions) == 2
+
+    # Case 2: Exact identity
+    prof2 = ReferenceCorpusProfile(100, {"inv874219": 1, "dummy": 99}, {})
+    ev2 = enrich_reference_identity(extract_reference_identity("INV-874219", "INV/874219"), prof2)
+    interp2 = interpret_reference_evidence(ev2, policy)
+    assert math.isclose(interp2.score, 0.90)
+    assert interp2.statistical_coverage == 1.0
+    assert len(interp2.contributions) == 1
+    assert interp2.contributions[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
+
+    # Case 3: Empty contributions (exact match = False, no shared tokens)
+    ev3 = enrich_reference_identity(extract_reference_identity("INV-111", "AB-222"), prof)
+    interp3 = interpret_reference_evidence(ev3, policy)
+    assert interp3.score == 0.0
+    assert interp3.statistical_coverage == 0.0
+    assert interp3.contributions == ()
+
+def test_compute_reference_interpretation_facade():
+    from recongraph.matching.reference_evidence import (
+        compute_reference_interpretation, ReferenceEvidenceContext,
+        ReferenceEvidencePolicy, ReferenceCorpusProfile, ReferenceEvidenceKind
+    )
+    import math
+    
+    policy = ReferenceEvidencePolicy()
+    prof = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 10, "874219": 1})
+    context = ReferenceEvidenceContext(profile=prof, policy=policy)
+
+    # 1. Empty reference fields -> Zero interpretation
+    interp1 = compute_reference_interpretation(None, None, context)
+    assert interp1.score == 0.0
+    assert interp1.statistical_coverage == 0.0
+    assert interp1.contributions == ()
+    
+    interp1b = compute_reference_interpretation("", "   ", context)
+    assert interp1b.score == 0.0
+    assert interp1b.statistical_coverage == 0.0
+    assert interp1b.contributions == ()
+
+    # 2. Mixed availability (one known in profile, one out-of-profile)
+    # Profile has 2026 (known, DF=10, mag=0.683) and 874219 (known, DF=1, mag=0.9).
+    # Let's test a pair sharing 2026 (known) and 121212 (out-of-profile, fallback=0.6).
+    interp2 = compute_reference_interpretation("INV-2026-121212", "AB-2026-121212", context)
+    # 2026 magnitude = 1 - sqrt(10/100) = 1 - sqrt(0.1) = 1 - 0.3162 = 0.68377
+    # 121212 magnitude = 0.60
+    # Winner is 2026 (higher magnitude)
+    assert math.isclose(interp2.score, 1.0 - math.sqrt(0.1))
+    assert interp2.statistical_coverage == 1.0
+    assert len(interp2.contributions) == 2
+    
+    winner2 = max(interp2.contributions, key=lambda c: c.positive_evidence)
+    assert winner2.identity_value == "2026"
+    assert winner2.statistics_available is True
+
+    # Reverse magnitude where out-of-profile wins
+    # Let's use an out-of-profile exact match: fallback is 0.60
+    # Let's say the token match has a low magnitude: 2026 (0.683)
+    # Wait, 0.683 > 0.60, so profiled wins.
+    # What if token is DF=64? mag = 1 - sqrt(0.64) = 0.20
+    prof_mixed = ReferenceCorpusProfile(100, {"dummy": 100}, {"2026": 64})
+    ctx_mixed = ReferenceEvidenceContext(profile=prof_mixed, policy=policy)
+    interp3 = compute_reference_interpretation("INV-2026-121212", "AB-2026-121212", ctx_mixed)
+    # Winner should be 121212 (0.60) since 2026 is only 0.20
+    assert interp3.score == 0.60
+    assert interp3.statistical_coverage == 0.0
+    winner3 = max(interp3.contributions, key=lambda c: c.positive_evidence)
+    assert winner3.identity_value == "121212"
+    assert winner3.statistics_available is False
+
+    # 3. Disjoint references (Zero evidence)
+    interp4 = compute_reference_interpretation("111", "222", context)
+    assert interp4.score == 0.0
+    assert interp4.statistical_coverage == 0.0
+    assert interp4.contributions == ()
+
+    # 4. Happy path exact match
+    prof_exact = ReferenceCorpusProfile(100, {"inv874219": 1, "dummy": 99}, {})
+    ctx_exact = ReferenceEvidenceContext(profile=prof_exact, policy=policy)
+    interp5 = compute_reference_interpretation("INV-874219", "INV/874219", ctx_exact)
+    assert math.isclose(interp5.score, 0.90)
+    assert interp5.statistical_coverage == 1.0
+    assert len(interp5.contributions) == 1
+    assert interp5.contributions[0].evidence_kind == ReferenceEvidenceKind.NORMALIZED_REFERENCE
+
+

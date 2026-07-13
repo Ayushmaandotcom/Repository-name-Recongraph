@@ -5,6 +5,7 @@ from enum import StrEnum
 from recongraph.matching.scoring import SignalName
 
 
+# Represents a statistical rarity boundary (score >= 0.8 implies token frequency <= 4% of corpus)
 STRONG_REFERENCE_SCORE = 0.8
 STRONG_ENTITY_SCORE = 0.9
 STRONG_AMOUNT_SCORE = 0.9

@@ -11,7 +11,6 @@ from recongraph.matching.scoring import (
 from recongraph.matching.signals import (
     amount_score,
     entity_score,
-    reference_score,
     tax_identity_score,
     temporal_score,
 )
@@ -20,6 +19,11 @@ from recongraph.matching.purchase_gst_semantics import (
     EligibilityResult,
     analyze_purchase_gst_semantics,
     evaluate_purchase_gst_one_to_one_eligibility,
+)
+from recongraph.matching.reference_evidence import (
+    ReferenceEvidenceContext,
+    ReferenceEvidenceInterpretation,
+    compute_reference_interpretation,
 )
 
 
@@ -46,22 +50,32 @@ class PairScoringResult:
     semantic_findings: tuple[SemanticFinding, ...]
     eligibility: EligibilityResult
     relationship: RelationshipScore
+    reference_interpretation: ReferenceEvidenceInterpretation
 
 
 def score_purchase_to_gst(
     purchase: PurchaseRecord,
     gst_record: GSTRecord,
+    reference_context: ReferenceEvidenceContext,
 ) -> PairScoringResult:
     """Score compatibility between purchase-side and GST-side evidence."""
+    reference_interpretation = compute_reference_interpretation(
+        purchase.reference,
+        gst_record.reference,
+        reference_context,
+    )
+
+    if not purchase.reference or not gst_record.reference:
+        ref_signal = None
+    else:
+        ref_signal = reference_interpretation.score
+
     signals = {
         SignalName.ENTITY: entity_score(
             purchase.vendor_name,
             gst_record.vendor_name,
         ),
-        SignalName.REFERENCE: reference_score(
-            purchase.reference,
-            gst_record.reference,
-        ),
+        SignalName.REFERENCE: ref_signal,
         SignalName.AMOUNT: amount_score(
             purchase.amount,
             gst_record.amount,
@@ -93,4 +107,5 @@ def score_purchase_to_gst(
         semantic_findings=semantic_findings,
         eligibility=eligibility,
         relationship=relationship,
+        reference_interpretation=reference_interpretation,
     )
