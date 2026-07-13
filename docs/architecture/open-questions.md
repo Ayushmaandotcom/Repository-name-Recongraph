@@ -1,14 +1,64 @@
 # Open Architecture Questions
 
-This document tracks intentional architectural deferrals, unresolved boundaries, and known limitations that were deliberately out-of-scope for the v0.1 release of ReconGraph.
+## Financial Semantic Naming Audit
 
-Good architecture isn't just documenting decisions—it's documenting the decisions we intentionally *didn't* make.
+**Source**: Stage 8B review  
+**Status**: OPEN  
+**Required before**: Stage 8J (Evidence Fusion)
 
-## Reference Evidence Interpretation
+### Question
 
-* **Continuous Coverage**: `statistical_coverage` is binary (0.0 or 1.0) in v0.1 due to the strongest-unit selection model. If a future strategy aggregates multiple tokens (e.g., probabilistic union), coverage mapping may need to become continuous.
-* **Joint DF Statistics**: Token independence is not assumed. The current model does not mathematically combine probabilities for multiple tokens because marginal document frequencies (`df(A)`) do not provide enough statistical justification for `df(A ∩ B)`. 
-* **Probabilistic Accumulation**: We currently use magnitude-based selection rather than probability calculation. Does the system eventually need a true Bayesian or probabilistic model for accumulating confidence?
-* **Exact-Reference Fallback Calibration**: The default heuristic magnitude for an out-of-profile exact identity match is currently locked at `0.60`. This may require empirical calibration against real dataset baselines.
-* **Serialization Strategy**: The `ReferenceEvidenceInterpretation` object drops the explicit `selected_contribution` reference to avoid standard dataclass serialization/deserialization issues (JSON recreating objects and breaking Python's `is` checks). The strict serialization boundaries for evidence lineage remain unresolved.
-* **Group-Level Evidence Accumulation**: v0.1 focuses on pair-level compatibility. Expanding this to evaluate reconciliation groupings across the graph remains deferred.
+Do `SPLIT_PAYMENT` and `FEE_DETECTED` represent proven financial semantics or candidate explanations inferred from conservation patterns?
+
+### Risk
+
+Interpretive labels may overstate what amount observations alone prove.
+
+**Example:**
+
+```
+100,000 ↔ 50,000 + 50,000
+```
+
+This supports **split structure**. It does not prove the business event was a "split payment."
+
+Possible actual events:
+- Split invoice
+- Partial posting
+- Tax component separation
+- Ledger allocation
+- Installments
+
+Similarly, `FEE_DETECTED` when `residual = 250` is a **candidate explanation**, not an observation. The residual could equally be:
+- A fee
+- A withholding
+- A rounding artifact
+- An adjustment
+- A posting error
+
+### Required Action
+
+Classify each financial evidence kind into one of:
+
+| Classification | Meaning |
+|---|---|
+| `OBSERVATION` | Raw arithmetic fact (e.g., `delta = 0`, `residual = 250`) |
+| `STRUCTURAL_INTERPRETATION` | Pattern inferred from structure (e.g., 1:N conservation, small nonzero residual) |
+| `BUSINESS_EXPLANATION` | Domain-specific candidate meaning (e.g., "split payment", "fee") |
+
+Current evidence units and their likely correct classification:
+
+| Evidence Unit | Current Label Type | Likely Correct Classification |
+|---|---|---|
+| `EXACT_TOTAL_MATCH` | Structural | `OBSERVATION` — sums are equal |
+| `SPLIT_PAYMENT` | Business | `STRUCTURAL_INTERPRETATION` — 1:N conservation |
+| `UNDERPAYMENT` | Business | `STRUCTURAL_INTERPRETATION` — positive residual |
+| `OVERPAYMENT` | Business | `STRUCTURAL_INTERPRETATION` — negative residual |
+| `FEE_DETECTED` | Business | `BUSINESS_EXPLANATION` — small residual candidate |
+| `ROUNDING_MATCH` | Structural | `STRUCTURAL_INTERPRETATION` — sub-tolerance residual |
+| `CURRENCY_MISMATCH` | Observation | `OBSERVATION` — currencies differ |
+| `GROSS_NET_MATCH` | Business | `BUSINESS_EXPLANATION` — tax-inclusive candidate |
+
+### Consequence for Stage 8J
+
+If Evidence Fusion treats `FEE_DETECTED` as an observed fact rather than a candidate explanation, the fusion engine may assign inappropriate confidence to what is actually an inference. The fusion layer must know the epistemic status of each evidence unit.
