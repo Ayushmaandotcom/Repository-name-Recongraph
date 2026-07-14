@@ -59,8 +59,7 @@ class HypothesisEvaluator:
         
         for provider in self.evidence_providers:
             contrib = provider.evaluate(purchases, gsts)
-            if contrib.score is not None:
-                signals[contrib.provider_name] = contrib.score
+            signals[contrib.provider_name] = contrib.score
             violations.update(contrib.violations)
             if contrib.metadata:
                 supporting_metadata[contrib.provider_name] = contrib.metadata
@@ -70,10 +69,10 @@ class HypothesisEvaluator:
         
         if legacy_eligibility.status == OneToOneEligibility.ELIGIBLE:
             eligibility = EligibilityStatus.ELIGIBLE
-        elif legacy_eligibility.status == OneToOneEligibility.REQUIRES_REVIEW:
-            eligibility = EligibilityStatus.REQUIRES_REVIEW
-        else:
+        elif legacy_eligibility.status == OneToOneEligibility.INELIGIBLE:
             eligibility = EligibilityStatus.INELIGIBLE
+        else:
+            raise NotImplementedError(f"Cannot map eligibility status: {legacy_eligibility.status}")
             
         relationship = calculate_relationship_score(
             signals=signals, policy=self.policy

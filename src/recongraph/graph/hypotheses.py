@@ -33,7 +33,6 @@ class Hypothesis:
 class EligibilityStatus(Enum):
     ELIGIBLE = "eligible"
     INELIGIBLE = "ineligible"
-    REQUIRES_REVIEW = "requires_review"
 
 @dataclass(frozen=True)
 class EvaluatedHypothesis:

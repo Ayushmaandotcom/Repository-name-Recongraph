@@ -6,9 +6,9 @@ from recongraph.matching.scoring import SignalName
 class EvidenceSummary:
     """A snapshot of the core signals that drove the score."""
     reference_score: float | None
-    amount_score: float
-    temporal_score: float
-    entity_score: float
+    amount_score: float | None
+    temporal_score: float | None
+    entity_score: float | None
     tax_identity_score: float | None
 
 @dataclass(frozen=True)
@@ -59,20 +59,20 @@ class ExplanationBuilder:
         
         summary = EvidenceSummary(
             reference_score=signals.get(SignalName.REFERENCE),
-            amount_score=signals.get(SignalName.AMOUNT, 0.0),
-            temporal_score=signals.get(SignalName.TEMPORAL, 0.0),
-            entity_score=signals.get(SignalName.ENTITY, 0.0),
+            amount_score=signals.get(SignalName.AMOUNT),
+            temporal_score=signals.get(SignalName.TEMPORAL),
+            entity_score=signals.get(SignalName.ENTITY),
             tax_identity_score=signals.get(SignalName.TAX_IDENTITY)
         )
         
         positives = []
-        if summary.amount_score == 1.0:
+        if summary.amount_score is not None and summary.amount_score == 1.0:
             positives.append("Amounts match perfectly.")
         if summary.reference_score is not None and summary.reference_score >= 0.8:
             positives.append("Strong reference match on a distinct identifier.")
-        if summary.entity_score >= 0.8:
+        if summary.entity_score is not None and summary.entity_score >= 0.8:
             positives.append("Vendor identities are highly similar.")
-        if summary.temporal_score == 1.0:
+        if summary.temporal_score is not None and summary.temporal_score == 1.0:
             positives.append("Dates match perfectly.")
             
         limits = []
@@ -80,10 +80,16 @@ class ExplanationBuilder:
             for v in sorted(list(hypothesis.violations)):
                 limits.append(f"Semantic violation: {v}")
                 
-        if summary.amount_score < 0.9:
+        if summary.amount_score is not None and summary.amount_score < 0.9:
             limits.append("Amounts differ significantly.")
-        if summary.temporal_score < 0.5:
+        elif summary.amount_score is None:
+            limits.append("Amount evidence unavailable.")
+            
+        if summary.temporal_score is not None and summary.temporal_score < 0.5:
             limits.append("Dates are far apart.")
+        elif summary.temporal_score is None:
+            limits.append("Date evidence unavailable.")
+            
         if summary.reference_score is None:
             limits.append("No reference provided to match.")
 
