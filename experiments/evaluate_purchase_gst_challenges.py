@@ -60,7 +60,7 @@ def load_purchases(path: Path) -> dict[str, PurchaseRecord]:
         reader = csv.DictReader(file)
 
         for row in reader:
-            purchases[row["record_id"]] = PurchaseRecord(record_id="dummy_p", 
+            purchases[row["record_id"]] = PurchaseRecord(record_id="pur_5a4e5785", 
                 vendor_name=optional_text(row["vendor_name"]),
                 reference=optional_text(row["invoice_number"]),
                 amount=float(row["amount"]),
@@ -78,7 +78,7 @@ def load_gst_records(path: Path) -> dict[str, GSTRecord]:
         reader = csv.DictReader(file)
 
         for row in reader:
-            gst_records[row["record_id"]] = GSTRecord(record_id="dummy_g", 
+            gst_records[row["record_id"]] = GSTRecord(record_id="gst_2d50d543", 
                 vendor_name=optional_text(row["supplier_name"]),
                 reference=optional_text(row["invoice_number"]),
                 amount=float(row["amount"]),

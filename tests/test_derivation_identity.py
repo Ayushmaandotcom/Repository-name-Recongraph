@@ -8,8 +8,7 @@ from recongraph.domain.derivations import (
     DerivationMethodId,
     DerivationMethodDescriptor,
     DerivationInputBinding,
-    DerivationIdentity,
-    DerivationExecution
+    DerivationIdentity
 )
 from recongraph.domain.observations import ObservationSlot, ObservationState, Observation, FieldPath
 from recongraph.domain.scopes import SubjectRef
@@ -51,7 +50,7 @@ def test_di001_same_inputs_method_version_same_identity():
         commutative_roles=frozenset()
     )
     
-    bindings = frozenset([DerivationInputBinding("source", obs)])
+    bindings = frozenset([DerivationInputBinding("source", obs.to_kernel_identity_ref())])
     
     id1 = DerivationIdentity.compute(
         provider_semantic_version=ProviderSemanticVersion(1, 0, 0),
@@ -82,15 +81,15 @@ def test_di002_commutative_roles_canonicalize():
     
     # Order 1
     b1 = frozenset([
-        DerivationInputBinding("amount", obs1),
-        DerivationInputBinding("amount", obs2)
+        DerivationInputBinding("amount", obs1.to_kernel_identity_ref()),
+        DerivationInputBinding("amount", obs2.to_kernel_identity_ref())
     ])
     id1 = DerivationIdentity.compute(ProviderSemanticVersion(1, 0, 0), desc, b1)
     
     # Order 2
     b2 = frozenset([
-        DerivationInputBinding("amount", obs2),
-        DerivationInputBinding("amount", obs1)
+        DerivationInputBinding("amount", obs2.to_kernel_identity_ref()),
+        DerivationInputBinding("amount", obs1.to_kernel_identity_ref())
     ])
     id2 = DerivationIdentity.compute(ProviderSemanticVersion(1, 0, 0), desc, b2)
     
@@ -109,14 +108,14 @@ def test_di003_directional_roles_distinct():
     )
     
     b1 = frozenset([
-        DerivationInputBinding("left", obs1),
-        DerivationInputBinding("right", obs2)
+        DerivationInputBinding("left", obs1.to_kernel_identity_ref()),
+        DerivationInputBinding("right", obs2.to_kernel_identity_ref())
     ])
     id1 = DerivationIdentity.compute(ProviderSemanticVersion(1, 0, 0), desc, b1)
     
     b2 = frozenset([
-        DerivationInputBinding("left", obs2),
-        DerivationInputBinding("right", obs1)
+        DerivationInputBinding("left", obs2.to_kernel_identity_ref()),
+        DerivationInputBinding("right", obs1.to_kernel_identity_ref())
     ])
     id2 = DerivationIdentity.compute(ProviderSemanticVersion(1, 0, 0), desc, b2)
     

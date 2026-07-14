@@ -120,7 +120,8 @@ def test_sl018_source_system_does_not_parse_provider_identity():
 
 from recongraph.domain.observations import ObservationSlot, ObservationState, Observation, FieldPath
 from recongraph.domain.scopes import SubjectRef
-from recongraph.domain.lineage import StructuredSourceLineage, SourceVersionRef, ObservationOccurrence
+from recongraph.domain.lineage import StructuredSourceLineage, SourceVersionRef
+from recongraph.domain.observations import ObservationOccurrence
 
 def test_structured_source_lineage_serialization():
     sys = SourceSystemId("sap.production")
@@ -150,16 +151,16 @@ def test_observation_occurrence_invariants():
     lin2 = StructuredSourceLineage(SourceSystemId("sys.b"), SourceArtifactId("2"), SourceLocator("L"))
     
     # 1. Same observation + same lineage = Equal
-    occ1a = ObservationOccurrence(obs1, lin1)
-    occ1b = ObservationOccurrence(obs1, lin1)
+    occ1a = ObservationOccurrence.create(obs1, lin1)
+    occ1b = ObservationOccurrence.create(obs1, lin1)
     assert occ1a == occ1b
     
     # 2. Same observation + different lineage = Distinct
-    occ_diff_lin = ObservationOccurrence(obs1, lin2)
+    occ_diff_lin = ObservationOccurrence.create(obs1, lin2)
     assert occ1a != occ_diff_lin
     
     # 3. Different observation + same lineage = Distinct
     # This prevents the OCR semantic attack where OCR engine A and B read the same PDF bbox 
     # but produce different text. Their lineage is identical, but their epistemic content differs.
-    occ_diff_obs = ObservationOccurrence(obs2, lin1)
+    occ_diff_obs = ObservationOccurrence.create(obs2, lin1)
     assert occ1a != occ_diff_obs

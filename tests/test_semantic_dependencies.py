@@ -26,7 +26,7 @@ def test_sd002_immutable_model_version_dependency():
     dep = SemanticDependencyRef(
         kind=SemanticDependencyKind.MODEL_ARTIFACT,
         namespace=IdentityDomainId("recongraph.model.vendor_encoder"),
-        identity=IdentityDigest("sha256:" + "m" * 64),
+        identity=IdentityDigest("sha256:" + "a" * 64),
         stability=DependencyStability.IMMUTABLE_VERSION,
         semantic_version="1.2.3"
     )

@@ -1,9 +1,9 @@
 import pytest
 
 from recongraph.domain.lineage import (
-    SourceSystemId, SourceArtifactId, SourceLocator, StructuredSourceLineage,
-    ObservationOccurrence
+    SourceSystemId, SourceArtifactId, SourceLocator, StructuredSourceLineage
 )
+from recongraph.domain.observations import ObservationOccurrence
 from recongraph.domain.observations import ObservationSlot, ObservationState, Observation, FieldPath
 from recongraph.domain.scopes import SubjectRef
 from recongraph.domain.derivations import (
@@ -51,8 +51,8 @@ def test_mta005_same_fact_same_lineage():
     slot = ObservationSlot(SubjectRef("urn:1"), FieldPath("vendor"))
     obs = Observation.create(slot, ObservationState.PRESENT, "ABC").identity
     l1 = StructuredSourceLineage(SourceSystemId("sap.sys"), SourceArtifactId("1"), SourceLocator("l"))
-    occ1 = ObservationOccurrence(obs, l1)
-    occ2 = ObservationOccurrence(obs, l1)
+    occ1 = ObservationOccurrence.create(obs, l1)
+    occ2 = ObservationOccurrence.create(obs, l1)
     assert occ1 == occ2
 
 
@@ -61,8 +61,8 @@ def test_mta006_same_fact_different_lineage():
     obs = Observation.create(slot, ObservationState.PRESENT, "ABC").identity
     l1 = StructuredSourceLineage(SourceSystemId("sap.sys"), SourceArtifactId("1"), SourceLocator("l"))
     l2 = StructuredSourceLineage(SourceSystemId("sap.sys"), SourceArtifactId("2"), SourceLocator("l"))
-    occ1 = ObservationOccurrence(obs, l1)
-    occ2 = ObservationOccurrence(obs, l2)
+    occ1 = ObservationOccurrence.create(obs, l1)
+    occ2 = ObservationOccurrence.create(obs, l2)
     assert occ1 != occ2
 
 
@@ -71,7 +71,7 @@ def test_mta007_same_semantic_derivation_executed_twice():
     obs = Observation.create(slot, ObservationState.PRESENT, "ABC").identity
     desc = DerivationMethodDescriptor(ProviderId("p.test"), DerivationMethodId("m"), frozenset())
     ver = ProviderSemanticVersion(1, 0, 0)
-    b = frozenset([DerivationInputBinding("in", obs)])
+    b = frozenset([DerivationInputBinding("in", obs.to_kernel_identity_ref())])
     
     id1 = DerivationIdentity.compute(ver, desc, b)
     id2 = DerivationIdentity.compute(ver, desc, b)
@@ -88,7 +88,7 @@ def test_mta009_provider_semantic_version_bump():
     slot = ObservationSlot(SubjectRef("urn:1"), FieldPath("vendor"))
     obs = Observation.create(slot, ObservationState.PRESENT, "ABC").identity
     desc = DerivationMethodDescriptor(ProviderId("p.test"), DerivationMethodId("m"), frozenset())
-    b = frozenset([DerivationInputBinding("in", obs)])
+    b = frozenset([DerivationInputBinding("in", obs.to_kernel_identity_ref())])
     
     id1 = DerivationIdentity.compute(ProviderSemanticVersion(1, 0, 0), desc, b)
     id2 = DerivationIdentity.compute(ProviderSemanticVersion(1, 1, 0), desc, b)
@@ -107,8 +107,8 @@ def test_mta011_commutative_inputs_permuted():
     desc = DerivationMethodDescriptor(ProviderId("p.test"), DerivationMethodId("m"), frozenset(["in"]))
     ver = ProviderSemanticVersion(1, 0, 0)
     
-    b1 = frozenset([DerivationInputBinding("in", obs1), DerivationInputBinding("in", obs2)])
-    b2 = frozenset([DerivationInputBinding("in", obs2), DerivationInputBinding("in", obs1)])
+    b1 = frozenset([DerivationInputBinding("in", obs1.to_kernel_identity_ref()), DerivationInputBinding("in", obs2.to_kernel_identity_ref())])
+    b2 = frozenset([DerivationInputBinding("in", obs2.to_kernel_identity_ref()), DerivationInputBinding("in", obs1.to_kernel_identity_ref())])
     
     id1 = DerivationIdentity.compute(ver, desc, b1)
     id2 = DerivationIdentity.compute(ver, desc, b2)
@@ -122,8 +122,8 @@ def test_mta012_directional_input_roles_reversed():
     desc = DerivationMethodDescriptor(ProviderId("p.test"), DerivationMethodId("m"), frozenset())
     ver = ProviderSemanticVersion(1, 0, 0)
     
-    b1 = frozenset([DerivationInputBinding("left", obs1), DerivationInputBinding("right", obs2)])
-    b2 = frozenset([DerivationInputBinding("left", obs2), DerivationInputBinding("right", obs1)])
+    b1 = frozenset([DerivationInputBinding("left", obs1.to_kernel_identity_ref()), DerivationInputBinding("right", obs2.to_kernel_identity_ref())])
+    b2 = frozenset([DerivationInputBinding("left", obs2.to_kernel_identity_ref()), DerivationInputBinding("right", obs1.to_kernel_identity_ref())])
     
     id1 = DerivationIdentity.compute(ver, desc, b1)
     id2 = DerivationIdentity.compute(ver, desc, b2)
