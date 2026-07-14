@@ -1,0 +1,5 @@
+# PAN Structural Semantics
+
+- PAN LENGTH VALIDATION: NO (inside TaxEvidenceProvider)
+- PAN CHARACTER-CLASS VALIDATION: NO
+- EXTERNAL VERIFICATION: NO

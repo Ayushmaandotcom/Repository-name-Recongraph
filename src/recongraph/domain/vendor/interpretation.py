@@ -78,71 +78,83 @@ class VendorPairInterpreter:
 
     @classmethod
     def _compare_gstin(cls, left: VendorNameObservation, right: VendorNameObservation) -> GSTRegistrationRelation:
-        l_miss = left.gstin_candidate is None
-        r_miss = right.gstin_candidate is None
+        left_gstin = left.tax_artifact.gstin_candidate if left.tax_artifact else None
+        left_valid = left.tax_artifact.gstin_valid if left.tax_artifact else None
+        right_gstin = right.tax_artifact.gstin_candidate if right.tax_artifact else None
+        right_valid = right.tax_artifact.gstin_valid if right.tax_artifact else None
+
+        l_miss = left_gstin is None
+        r_miss = right_gstin is None
         
         if l_miss and r_miss:
             return GSTRegistrationRelation(GSTRegistrationRelationState.BOTH_MISSING, None, None)
         if l_miss and not r_miss:
-            if not right.gstin_structurally_valid:
-                return GSTRegistrationRelation(GSTRegistrationRelationState.ONE_UNINTERPRETABLE, None, right.gstin_candidate)
-            return GSTRegistrationRelation(GSTRegistrationRelationState.LEFT_MISSING, None, right.gstin_candidate)
+            if not right_valid:
+                return GSTRegistrationRelation(GSTRegistrationRelationState.ONE_UNINTERPRETABLE, None, right_gstin)
+            return GSTRegistrationRelation(GSTRegistrationRelationState.LEFT_MISSING, None, right_gstin)
         if not l_miss and r_miss:
-            if not left.gstin_structurally_valid:
-                return GSTRegistrationRelation(GSTRegistrationRelationState.ONE_UNINTERPRETABLE, left.gstin_candidate, None)
-            return GSTRegistrationRelation(GSTRegistrationRelationState.RIGHT_MISSING, left.gstin_candidate, None)
+            if not left_valid:
+                return GSTRegistrationRelation(GSTRegistrationRelationState.ONE_UNINTERPRETABLE, left_gstin, None)
+            return GSTRegistrationRelation(GSTRegistrationRelationState.RIGHT_MISSING, left_gstin, None)
             
         # Both present
-        l_valid = left.gstin_structurally_valid
-        r_valid = right.gstin_structurally_valid
+        l_valid = left_valid
+        r_valid = right_valid
         
         if not l_valid and not r_valid:
-            return GSTRegistrationRelation(GSTRegistrationRelationState.BOTH_UNINTERPRETABLE, left.gstin_candidate, right.gstin_candidate)
+            return GSTRegistrationRelation(GSTRegistrationRelationState.BOTH_UNINTERPRETABLE, left_gstin, right_gstin)
         if not l_valid:
-            return GSTRegistrationRelation(GSTRegistrationRelationState.LEFT_UNINTERPRETABLE, left.gstin_candidate, right.gstin_candidate)
+            return GSTRegistrationRelation(GSTRegistrationRelationState.LEFT_UNINTERPRETABLE, left_gstin, right_gstin)
         if not r_valid:
-            return GSTRegistrationRelation(GSTRegistrationRelationState.RIGHT_UNINTERPRETABLE, left.gstin_candidate, right.gstin_candidate)
+            return GSTRegistrationRelation(GSTRegistrationRelationState.RIGHT_UNINTERPRETABLE, left_gstin, right_gstin)
             
-        if left.gstin_candidate == right.gstin_candidate:
-            return GSTRegistrationRelation(GSTRegistrationRelationState.VALID_AND_EQUAL, left.gstin_candidate, right.gstin_candidate)
-        return GSTRegistrationRelation(GSTRegistrationRelationState.VALID_AND_DIFFERENT, left.gstin_candidate, right.gstin_candidate)
+        if left_gstin == right_gstin:
+            return GSTRegistrationRelation(GSTRegistrationRelationState.VALID_AND_EQUAL, left_gstin, right_gstin)
+        return GSTRegistrationRelation(GSTRegistrationRelationState.VALID_AND_DIFFERENT, left_gstin, right_gstin)
 
     @classmethod
     def _compare_pan(cls, left: VendorNameObservation, right: VendorNameObservation) -> PANRelation:
-        l_miss = left.pan_candidate is None
-        r_miss = right.pan_candidate is None
+        left_pan = left.tax_artifact.pan_candidate if left.tax_artifact else None
+        left_valid = left.tax_artifact.pan_valid if left.tax_artifact else None
+        left_derived = left.tax_artifact.pan_derived_from_gstin if left.tax_artifact else False
+        right_pan = right.tax_artifact.pan_candidate if right.tax_artifact else None
+        right_valid = right.tax_artifact.pan_valid if right.tax_artifact else None
+        right_derived = right.tax_artifact.pan_derived_from_gstin if right.tax_artifact else False
+
+        l_miss = left_pan is None
+        r_miss = right_pan is None
         
         if l_miss and r_miss:
             return PANRelation(PANRelationState.BOTH_MISSING, None, None, None)
         if l_miss and not r_miss:
-            if not right.pan_structurally_valid:
-                return PANRelation(PANRelationState.RIGHT_UNINTERPRETABLE, None, None, right.pan_candidate)
-            return PANRelation(PANRelationState.LEFT_MISSING, None, None, right.pan_candidate)
+            if not right_valid:
+                return PANRelation(PANRelationState.RIGHT_UNINTERPRETABLE, None, None, right_pan)
+            return PANRelation(PANRelationState.LEFT_MISSING, None, None, right_pan)
         if not l_miss and r_miss:
-            if not left.pan_structurally_valid:
-                return PANRelation(PANRelationState.LEFT_UNINTERPRETABLE, None, left.pan_candidate, None)
-            return PANRelation(PANRelationState.RIGHT_MISSING, None, left.pan_candidate, None)
+            if not left_valid:
+                return PANRelation(PANRelationState.LEFT_UNINTERPRETABLE, None, left_pan, None)
+            return PANRelation(PANRelationState.RIGHT_MISSING, None, left_pan, None)
             
-        l_valid = left.pan_structurally_valid
-        r_valid = right.pan_structurally_valid
+        l_valid = left_valid
+        r_valid = right_valid
         
         if not l_valid and not r_valid:
-            return PANRelation(PANRelationState.BOTH_UNINTERPRETABLE, None, left.pan_candidate, right.pan_candidate)
+            return PANRelation(PANRelationState.BOTH_UNINTERPRETABLE, None, left_pan, right_pan)
         if not l_valid:
-            return PANRelation(PANRelationState.LEFT_UNINTERPRETABLE, None, left.pan_candidate, right.pan_candidate)
+            return PANRelation(PANRelationState.LEFT_UNINTERPRETABLE, None, left_pan, right_pan)
         if not r_valid:
-            return PANRelation(PANRelationState.RIGHT_UNINTERPRETABLE, None, left.pan_candidate, right.pan_candidate)
+            return PANRelation(PANRelationState.RIGHT_UNINTERPRETABLE, None, left_pan, right_pan)
             
         dep = PANEvidenceDependence.INDEPENDENT
-        if left.pan_derived_from_gstin and right.pan_derived_from_gstin:
-            if left.gstin_candidate == right.gstin_candidate:
+        if left_derived and right_derived:
+            if left.tax_artifact and right.tax_artifact and left.tax_artifact.gstin_candidate == right.tax_artifact.gstin_candidate:
                 dep = PANEvidenceDependence.SAME_SOURCE_DERIVATION
-        elif left.pan_derived_from_gstin or right.pan_derived_from_gstin:
+        elif left_derived or right_derived:
             dep = PANEvidenceDependence.PARTIALLY_DEPENDENT
             
-        if left.pan_candidate == right.pan_candidate:
-            return PANRelation(PANRelationState.VALID_AND_EQUAL, dep, left.pan_candidate, right.pan_candidate)
-        return PANRelation(PANRelationState.VALID_AND_DIFFERENT, dep, left.pan_candidate, right.pan_candidate)
+        if left_pan == right_pan:
+            return PANRelation(PANRelationState.VALID_AND_EQUAL, dep, left_pan, right_pan)
+        return PANRelation(PANRelationState.VALID_AND_DIFFERENT, dep, left_pan, right_pan)
 
     @classmethod
     def _compare_lexical(cls, left: VendorNameObservation, right: VendorNameObservation, context: VendorIdentityContext) -> Tuple[LexicalRelation, Tuple[str, ...]]:

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import pytest
 from recongraph.graph.candidate import (
     CandidateGraphBuilder,
@@ -13,8 +14,8 @@ def test_candidate_graph_builder_deduplicates_edges():
     p_id = build_purchase_urn("p1")
     g_id = build_gst_urn("g1")
     
-    p = PurchaseRecord(record_id="p1", vendor_name="A", reference="R", amount=1.0, record_date=date(2026,1,1), tax_identity="T")
-    g = GSTRecord(record_id="g1", vendor_name="A", reference="R", amount=1.0, record_date=date(2026,1,1), tax_identity="T")
+    p = PurchaseRecord(record_id="p1", vendor_name="A", reference="R", amount=Decimal("1.0"), record_date=date(2026,1,1), tax_identity="T")
+    g = GSTRecord(record_id="g1", vendor_name="A", reference="R", amount=Decimal("1.0"), record_date=date(2026,1,1), tax_identity="T")
     
     builder.add_node(p_id, p)
     builder.add_node(g_id, g)
@@ -41,7 +42,7 @@ def test_candidate_graph_builder_deduplicates_edges():
 def test_candidate_graph_forbids_self_loops():
     builder = CandidateGraphBuilder()
     p_id = build_purchase_urn("p1")
-    p = PurchaseRecord(record_id="p1", vendor_name="A", reference="R", amount=1.0, record_date=date(2026,1,1), tax_identity="T")
+    p = PurchaseRecord(record_id="p1", vendor_name="A", reference="R", amount=Decimal("1.0"), record_date=date(2026,1,1), tax_identity="T")
     builder.add_node(p_id, p)
     
     builder.add_candidate_edge(p_id, p_id, frozenset(["AMT:1.0"]))

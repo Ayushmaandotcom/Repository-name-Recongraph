@@ -1,6 +1,9 @@
 import pytest
+from decimal import Decimal
 from recongraph.domain.vendor.observation import VendorNameObservation, VendorObservationState
 from recongraph.domain.vendor.parser import DeterministicVendorParser
+from recongraph.domain.tax.parser import ParsedTaxIdentifierArtifact
+from recongraph.domain.tax.observation import TaxIdentifierObservation, TaxObservationState as TaxState, TaxIdentifierCandidateType
 from recongraph.domain.vendor.artifact import build_vendor_observation_artifact
 from recongraph.domain.vendor.context import VendorIdentityContext, VendorCorpusProfile
 from recongraph.domain.vendor.interpretation import VendorPairInterpreter
@@ -49,11 +52,15 @@ def test_pan_conflict_capping_072_problem(default_context):
         recognized_designators=(),
         token_spans=(),
         normalization_events=(),
-        gstin_candidate=None,
-        gstin_structurally_valid=None,
-        pan_candidate="AAAAA1111A",
-        pan_structurally_valid=True,
-        pan_derived_from_gstin=False
+        tax_artifact=ParsedTaxIdentifierArtifact(
+            observation=TaxIdentifierObservation("AAAAA1111A", "vendor_name", TaxIdentifierCandidateType.PAN, TaxState.PRESENT),
+            gstin_candidate=None,
+            gstin_valid=None,
+            pan_candidate="AAAAA1111A",
+            pan_valid=True,
+            pan_derived_from_gstin=False,
+            normalization_events=()
+        )
     )
     left_id = build_vendor_observation_artifact(left_obs).identity
     
@@ -66,11 +73,15 @@ def test_pan_conflict_capping_072_problem(default_context):
         recognized_designators=(),
         token_spans=(),
         normalization_events=(),
-        gstin_candidate=None,
-        gstin_structurally_valid=None,
-        pan_candidate="BBBBB2222B",
-        pan_structurally_valid=True,
-        pan_derived_from_gstin=False
+        tax_artifact=ParsedTaxIdentifierArtifact(
+            observation=TaxIdentifierObservation("BBBBB2222B", "vendor_name", TaxIdentifierCandidateType.PAN, TaxState.PRESENT),
+            gstin_candidate=None,
+            gstin_valid=None,
+            pan_candidate="BBBBB2222B",
+            pan_valid=True,
+            pan_derived_from_gstin=False,
+            normalization_events=()
+        )
     )
     right_id = build_vendor_observation_artifact(right_obs).identity
     

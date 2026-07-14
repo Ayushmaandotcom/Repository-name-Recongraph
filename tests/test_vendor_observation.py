@@ -64,24 +64,30 @@ def test_gstin_and_pan_detection():
     # Valid GSTIN
     gstin = "07ABCDE1234F1Z5"
     obs_gstin = DeterministicVendorParser.parse(gstin)
-    assert obs_gstin.gstin_candidate == gstin
-    assert obs_gstin.gstin_structurally_valid is True
-    assert obs_gstin.pan_candidate == "ABCDE1234F"
-    assert obs_gstin.pan_structurally_valid is True
-    assert obs_gstin.pan_derived_from_gstin is True
+    assert obs_gstin.tax_artifact is not None
+    assert obs_gstin.tax_artifact.gstin_candidate == gstin
+    assert obs_gstin.tax_artifact.gstin_valid is True
+    assert obs_gstin.tax_artifact.pan_candidate == "ABCDE1234F"
+    assert obs_gstin.tax_artifact.pan_valid is True
+    assert obs_gstin.tax_artifact.pan_derived_from_gstin is True
 
     # Invalid GSTIN but looks like one (e.g. wrong length or OCR error)
     invalid_gstin = "07ABCDE1234F1Z5A" # 16 chars
     obs_invalid = DeterministicVendorParser.parse(invalid_gstin)
-    assert obs_invalid.gstin_candidate is None # Doesn't match length
+    # The new deterministic tax parser classifies by length. 16 chars means UNKNOWN candidate type.
+    # The vendor name is 16 chars long. Wait, if it doesn't match length, the candidate type is UNKNOWN.
+    # Therefore, gstin_candidate will be None.
+    assert obs_invalid.tax_artifact is not None
+    assert obs_invalid.tax_artifact.gstin_candidate is None # Doesn't match length
     
     # A standalone PAN
     pan = "ABCDE1234F"
     obs_pan = DeterministicVendorParser.parse(pan)
-    assert obs_pan.gstin_candidate is None
-    assert obs_pan.pan_candidate == pan
-    assert obs_pan.pan_structurally_valid is True
-    assert obs_pan.pan_derived_from_gstin is False
+    assert obs_pan.tax_artifact is not None
+    assert obs_pan.tax_artifact.gstin_candidate is None
+    assert obs_pan.tax_artifact.pan_candidate == pan
+    assert obs_pan.tax_artifact.pan_valid is True
+    assert obs_pan.tax_artifact.pan_derived_from_gstin is False
 
 
 def test_artifact_identity_properties():

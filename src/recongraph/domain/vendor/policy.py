@@ -75,6 +75,7 @@ class VendorProjectionPolicyV1:
             if base_similarity is not None and base_similarity > cls.LEGAL_FORM_CONFLICT_CAP:
                 base_similarity = cls.LEGAL_FORM_CONFLICT_CAP
                 
+
         # 4. Evaluate Tax Identifiers & Dependence
         gst = interpretation.gst_registration_relation
         pan = interpretation.pan_relation

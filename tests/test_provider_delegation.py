@@ -2,6 +2,16 @@ import pytest
 from datetime import date
 from decimal import Decimal
 from recongraph.domain.records import PurchaseRecord, GSTRecord
+from recongraph.domain.vendor.context import VendorIdentityContext, VendorCorpusProfile
+
+def _get_vendor_context():
+    return VendorIdentityContext(
+        corpus_profile=VendorCorpusProfile(corpus_size=1, token_document_frequencies={}, digest="1"),
+        interpreter_policy_version="1.0.0",
+        fuzzy_minimum_length=6,
+        fuzzy_threshold=0.85,
+        distinctiveness_threshold=0.01
+    )
 from recongraph.plugins.core_providers import (
     TaxEvidenceProvider, 
     VendorEvidenceProvider, 
@@ -54,7 +64,7 @@ def test_genuinely_different_tax_identities_still_conflict():
     assert "TAX_IDENTITY_CONFLICT" in contrib.violations
 
 def test_vendor_signal_discriminates_between_matching_and_unrelated_vendors():
-    provider = VendorEvidenceProvider()
+    provider = VendorEvidenceProvider(_get_vendor_context())
     
     p = create_purchase(vendor_name="ABC Steel Pvt Ltd")
     g = create_gst(vendor_name="ABC STEELS PVT. LTD.")
@@ -77,7 +87,7 @@ def test_group_containing_a_conflicting_tax_identity_conflicts():
     assert "TAX_IDENTITY_CONFLICT" in contrib.violations
 
 def test_vendor_provider_abstains_rather_than_scoring_zero_when_name_absent():
-    provider = VendorEvidenceProvider()
+    provider = VendorEvidenceProvider(_get_vendor_context())
     p = create_purchase(vendor_name=None)
     g = create_gst(vendor_name=None)
     contrib = provider.evaluate([p], [g])

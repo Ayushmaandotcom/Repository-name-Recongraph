@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from recongraph.domain.tax.parser import ParsedTaxIdentifierArtifact
 
 class VendorObservationState(Enum):
     PRESENT = auto()
@@ -58,9 +61,4 @@ class VendorNameObservation:
     token_spans: Tuple[TokenSpan, ...]
     normalization_events: Tuple[VendorNormalizationEvent, ...]
     
-    gstin_candidate: Optional[str]
-    gstin_structurally_valid: Optional[bool]
-    
-    pan_candidate: Optional[str]
-    pan_structurally_valid: Optional[bool]
-    pan_derived_from_gstin: bool
+    tax_artifact: Optional["ParsedTaxIdentifierArtifact"] = None

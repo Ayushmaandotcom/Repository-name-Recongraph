@@ -17,6 +17,9 @@ class SemanticFinding(StrEnum):
     DISTINCT_EVENT_IDENTITY_EVIDENCE = (
         "distinct_event_identity_evidence"
     )
+    PAN_IDENTIFIER_CONFLICT = "pan_identifier_conflict"
+    GST_REGISTRATION_IDENTIFIER_DIFFERENCE = "gst_registration_identifier_difference"
+    LEGAL_FORM_LEXICAL_DIFFERENCE = "legal_form_lexical_difference"
 
 
 def analyze_purchase_gst_semantics(
@@ -89,11 +92,17 @@ class EligibilityResult:
             )
 
 
+# POLICY CHALLENGE:
+# Is LEGAL_FORM_LEXICAL_DIFFERENCE universally blocking for Purchase <-> GST 1:1 reconciliation?
+# Current V1 policy: YES
+# Status: CONSERVATIVE POLICY — NOT YET EMPIRICALLY CALIBRATED
 ONE_TO_ONE_BLOCKING_FINDINGS = frozenset(
     {
         SemanticFinding.SEVERE_AMOUNT_CONFLICT,
         SemanticFinding.TAX_IDENTITY_CONFLICT,
         SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+        SemanticFinding.PAN_IDENTIFIER_CONFLICT,
+        SemanticFinding.LEGAL_FORM_LEXICAL_DIFFERENCE,
     }
 )
 

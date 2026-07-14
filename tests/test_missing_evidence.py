@@ -23,6 +23,7 @@ def test_explanation_reports_unavailable_evidence_as_unavailable_not_as_disagree
     hypothesis = EvaluatedHypothesis(
         hypothesis=Hypothesis(frozenset(), frozenset()),
         score=0.5,
+            coverage=1.0,
         eligibility=EligibilityStatus.ELIGIBLE,
         supporting_evidence={"signals": {}},
         violations=frozenset()
@@ -65,6 +66,7 @@ def test_missing_evidence_reduces_coverage_without_zeroing_the_score():
     hypothesis = EvaluatedHypothesis(
         hypothesis=Hypothesis(frozenset(), frozenset()),
         score=0.5,
+            coverage=1.0,
         eligibility=EligibilityStatus.ELIGIBLE,
         supporting_evidence={
             "signals": {SignalName.AMOUNT: 1.0, SignalName.TEMPORAL: 1.0},

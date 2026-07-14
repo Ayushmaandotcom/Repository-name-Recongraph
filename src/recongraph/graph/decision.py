@@ -20,6 +20,11 @@ class ReconciliationDecision:
 class DecisionPolicy:
     auto_match_threshold: float = 0.95
     ambiguity_margin: float = 0.05
+    # 0.80 is a conservative V1 operational policy, not a scientifically 
+    # proven sufficiency boundary. It requires eventual calibration against 
+    # a labelled reconciliation corpus. Coverage is a policy-weight completeness 
+    # ratio; it is not probability, statistical confidence, or certainty.
+    minimum_coverage_threshold: float = 0.80
 
 class DecisionEngine:
     """
@@ -70,12 +75,20 @@ class DecisionEngine:
 
         # Check against automation threshold
         if top_hypothesis.score >= self.policy.auto_match_threshold:
-            return ReconciliationDecision(
-                action=DecisionAction.AUTO_MATCH,
-                selected_hypothesis=top_hypothesis,
-                competitors=competitors,
-                rationale=f"Dominant hypothesis score ({top_hypothesis.score:.3f}) cleared the auto-match threshold ({self.policy.auto_match_threshold})."
-            )
+            if top_hypothesis.coverage >= self.policy.minimum_coverage_threshold:
+                return ReconciliationDecision(
+                    action=DecisionAction.AUTO_MATCH,
+                    selected_hypothesis=top_hypothesis,
+                    competitors=competitors,
+                    rationale=f"Dominant hypothesis score ({top_hypothesis.score:.3f}) and coverage ({top_hypothesis.coverage:.3f}) cleared the auto-match threshold."
+                )
+            else:
+                return ReconciliationDecision(
+                    action=DecisionAction.REVIEW_WEAK,
+                    selected_hypothesis=top_hypothesis,
+                    competitors=competitors,
+                    rationale=f"Dominant hypothesis score ({top_hypothesis.score:.3f}) is high, but coverage ({top_hypothesis.coverage:.3f}) is below minimum threshold ({self.policy.minimum_coverage_threshold})."
+                )
         else:
             return ReconciliationDecision(
                 action=DecisionAction.REVIEW_WEAK,

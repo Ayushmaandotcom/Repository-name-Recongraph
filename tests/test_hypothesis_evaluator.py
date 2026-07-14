@@ -1,3 +1,4 @@
+from decimal import Decimal
 import pytest
 from datetime import date
 from recongraph.graph.candidate import CandidateGraphBuilder, build_purchase_urn, build_gst_urn
@@ -8,6 +9,16 @@ from recongraph.matching.scoring import SignalName
 from recongraph.graph.evaluator import HypothesisEvaluator
 from recongraph.plugins.core_providers import FinancialEvidenceProvider, TemporalEvidenceProvider, TaxEvidenceProvider, VendorEvidenceProvider, ReferenceEvidenceProvider
 from recongraph.matching.pair_scorers import PURCHASE_TO_GST_POLICY
+from recongraph.domain.vendor.context import VendorIdentityContext, VendorCorpusProfile
+
+def _get_vendor_context():
+    return VendorIdentityContext(
+        corpus_profile=VendorCorpusProfile(corpus_size=1, token_document_frequencies={}, digest="1"),
+        interpreter_policy_version="1.0.0",
+        fuzzy_minimum_length=6,
+        fuzzy_threshold=0.85,
+        distinctiveness_threshold=0.01
+    )
 
 @pytest.fixture
 def empty_reference_context():
@@ -22,8 +33,8 @@ def empty_reference_context():
 
 def test_evaluator_case_1(empty_reference_context):
     # P1 (100k) -> G1 (100k)
-    p1 = PurchaseRecord(record_id="p1", amount=100.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
-    g1 = GSTRecord(record_id="g1", amount=100.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    p1 = PurchaseRecord(record_id="p1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    g1 = GSTRecord(record_id="g1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
     
     builder = CandidateGraphBuilder()
     u1, u2 = build_purchase_urn("p1"), build_gst_urn("g1")
@@ -39,7 +50,7 @@ def test_evaluator_case_1(empty_reference_context):
         FinancialEvidenceProvider(),
         TemporalEvidenceProvider(),
         TaxEvidenceProvider(),
-        VendorEvidenceProvider(),
+        VendorEvidenceProvider(_get_vendor_context()),
         ReferenceEvidenceProvider(empty_reference_context)
     ]
     evaluator = HypothesisEvaluator(providers, PURCHASE_TO_GST_POLICY)
@@ -51,9 +62,9 @@ def test_evaluator_case_1(empty_reference_context):
 
 def test_evaluator_case_2(empty_reference_context):
     # P1 (100k) -> G1 (50k), G2 (50k)
-    p1 = PurchaseRecord(record_id="p1", amount=100.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
-    g1 = GSTRecord(record_id="g1", amount=50.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
-    g2 = GSTRecord(record_id="g2", amount=50.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    p1 = PurchaseRecord(record_id="p1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    g1 = GSTRecord(record_id="g1", amount=Decimal("50.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    g2 = GSTRecord(record_id="g2", amount=Decimal("50.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
     
     builder = CandidateGraphBuilder()
     u1, u2, u3 = build_purchase_urn("p1"), build_gst_urn("g1"), build_gst_urn("g2")
@@ -70,7 +81,7 @@ def test_evaluator_case_2(empty_reference_context):
         FinancialEvidenceProvider(),
         TemporalEvidenceProvider(),
         TaxEvidenceProvider(),
-        VendorEvidenceProvider(),
+        VendorEvidenceProvider(_get_vendor_context()),
         ReferenceEvidenceProvider(empty_reference_context)
     ]
     evaluator = HypothesisEvaluator(providers, PURCHASE_TO_GST_POLICY)
@@ -82,9 +93,9 @@ def test_evaluator_case_2(empty_reference_context):
 
 def test_evaluator_case_3(empty_reference_context):
     # P1 (100k) -> G1 (40k), G2 (40k) (Incorrect sum)
-    p1 = PurchaseRecord(record_id="p1", amount=100.0, record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
-    g1 = GSTRecord(record_id="g1", amount=40.0, record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
-    g2 = GSTRecord(record_id="g2", amount=40.0, record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
+    p1 = PurchaseRecord(record_id="p1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
+    g1 = GSTRecord(record_id="g1", amount=Decimal("40.0"), record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
+    g2 = GSTRecord(record_id="g2", amount=Decimal("40.0"), record_date=date(2023,1,1), reference="INV2", vendor_name="B", tax_identity="TAX2")
     
     builder = CandidateGraphBuilder()
     u1, u2, u3 = build_purchase_urn("p1"), build_gst_urn("g1"), build_gst_urn("g2")
@@ -101,7 +112,7 @@ def test_evaluator_case_3(empty_reference_context):
         FinancialEvidenceProvider(),
         TemporalEvidenceProvider(),
         TaxEvidenceProvider(),
-        VendorEvidenceProvider(),
+        VendorEvidenceProvider(_get_vendor_context()),
         ReferenceEvidenceProvider(empty_reference_context)
     ]
     evaluator = HypothesisEvaluator(providers, PURCHASE_TO_GST_POLICY)
@@ -112,8 +123,8 @@ def test_evaluator_case_3(empty_reference_context):
 
 def test_evaluator_case_4(empty_reference_context):
     # P1 -> G1 (Semantic contradiction: date > max_days)
-    p1 = PurchaseRecord(record_id="p1", amount=100.0, record_date=date(2023,1,1), reference="INV3", vendor_name="C", tax_identity="TAX3")
-    g1 = GSTRecord(record_id="g1", amount=100.0, record_date=date(2024,1,1), reference="INV3", vendor_name="C", tax_identity="TAX3")
+    p1 = PurchaseRecord(record_id="p1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV3", vendor_name="C", tax_identity="TAX3")
+    g1 = GSTRecord(record_id="g1", amount=Decimal("100.0"), record_date=date(2024,1,1), reference="INV3", vendor_name="C", tax_identity="TAX3")
     
     builder = CandidateGraphBuilder()
     u1, u2 = build_purchase_urn("p1"), build_gst_urn("g1")
@@ -129,7 +140,7 @@ def test_evaluator_case_4(empty_reference_context):
         FinancialEvidenceProvider(),
         TemporalEvidenceProvider(),
         TaxEvidenceProvider(),
-        VendorEvidenceProvider(),
+        VendorEvidenceProvider(_get_vendor_context()),
         ReferenceEvidenceProvider(empty_reference_context)
     ]
     evaluator = HypothesisEvaluator(providers, PURCHASE_TO_GST_POLICY)

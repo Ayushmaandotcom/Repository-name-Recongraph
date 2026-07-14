@@ -9,7 +9,6 @@ from recongraph.matching.scoring import (
     calculate_relationship_score,
 )
 from recongraph.matching.signals import (
-    entity_score,
     tax_identity_score,
     temporal_score,
 )
@@ -26,9 +25,10 @@ from recongraph.matching.reference_evidence import (
 )
 from recongraph.domain.financial.pipeline import FinancialEvidencePipeline, AmountInterpretation
 from recongraph.domain.financial.amount_projection import project_amount_similarity, ProjectedAmountSimilarity
-
-
-
+from recongraph.domain.vendor.context import VendorIdentityContext
+from recongraph.domain.vendor.interpretation import VendorIdentityInterpretation
+from recongraph.domain.vendor.projection import VendorEvidenceProjection
+from recongraph.plugins.core_providers import VendorEvidenceProvider
 PURCHASE_TO_GST_MAX_DAYS = 7
 
 
@@ -55,12 +55,15 @@ class PairScoringResult:
     reference_interpretation: ReferenceEvidenceInterpretation
     amount_interpretation: AmountInterpretation
     amount_projection: ProjectedAmountSimilarity
+    vendor_interpretation: VendorIdentityInterpretation | None
+    vendor_projection: VendorEvidenceProjection | None
 
 
 def score_purchase_to_gst(
     purchase: PurchaseRecord,
     gst_record: GSTRecord,
     reference_context: ReferenceEvidenceContext,
+    vendor_context: VendorIdentityContext,
 ) -> PairScoringResult:
     """Score compatibility between purchase-side and GST-side evidence."""
     reference_interpretation = compute_reference_interpretation(
@@ -78,12 +81,14 @@ def score_purchase_to_gst(
     amount_observation = pipeline.extract([purchase], [gst_record])
     amount_interpretation = pipeline.interpret(amount_observation)
     amount_projection = project_amount_similarity(amount_interpretation)
+    
+    vendor_provider = VendorEvidenceProvider(vendor_context)
+    vendor_contrib = vendor_provider.evaluate([purchase], [gst_record])
 
+    from recongraph.domain.tax.parser import DeterministicTaxParser
+    
     signals = {
-        SignalName.ENTITY: entity_score(
-            purchase.vendor_name,
-            gst_record.vendor_name,
-        ),
+        SignalName.ENTITY: vendor_contrib.score,
         SignalName.REFERENCE: ref_signal,
         SignalName.AMOUNT: amount_projection.similarity,
         SignalName.TEMPORAL: temporal_score(
@@ -92,14 +97,26 @@ def score_purchase_to_gst(
             max_days=PURCHASE_TO_GST_MAX_DAYS,
         ),
         SignalName.TAX_IDENTITY: tax_identity_score(
-            purchase.tax_identity,
-            gst_record.tax_identity,
+            DeterministicTaxParser.parse(purchase.tax_identity, "tax_identity"),
+            DeterministicTaxParser.parse(gst_record.tax_identity, "tax_identity"),
         ),
     }
 
-    semantic_findings = analyze_purchase_gst_semantics(
+    semantic_findings = list(analyze_purchase_gst_semantics(
         signals
-    )
+    ))
+    
+    if vendor_contrib.metadata and "vendor_projection" in vendor_contrib.metadata:
+        v_proj = vendor_contrib.metadata["vendor_projection"]
+        if v_proj and v_proj.contradiction_markers:
+            for marker in v_proj.contradiction_markers:
+                try:
+                    semantic_findings.append(SemanticFinding(marker.lower()))
+                except ValueError:
+                    pass
+
+    semantic_findings = tuple(semantic_findings)
+    
     eligibility = evaluate_purchase_gst_one_to_one_eligibility(
         semantic_findings
     )
@@ -116,4 +133,6 @@ def score_purchase_to_gst(
         reference_interpretation=reference_interpretation,
         amount_interpretation=amount_interpretation,
         amount_projection=amount_projection,
+        vendor_interpretation=vendor_contrib.metadata.get("vendor_interpretation"),
+        vendor_projection=vendor_contrib.metadata.get("vendor_projection"),
     )

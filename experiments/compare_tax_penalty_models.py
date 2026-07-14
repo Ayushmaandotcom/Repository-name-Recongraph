@@ -1,3 +1,4 @@
+from decimal import Decimal
 import csv
 from dataclasses import dataclass
 from datetime import date
@@ -75,7 +76,7 @@ def parse_purchase_record(row: dict[str, str]) -> PurchaseRecord:
     return PurchaseRecord(record_id="pur_cedf16a5", 
         vendor_name=optional_text(row.get("vendor_name", "")),
         reference=optional_text(row.get("invoice_number", "")),
-        amount=float(row["amount"]),
+        amount=Decimal(row["amount"]),
         record_date=date.fromisoformat(row["invoice_date"]),
         tax_identity=optional_text(row.get("gstin", "")),
     )
@@ -85,7 +86,7 @@ def parse_gst_record(row: dict[str, str]) -> GSTRecord:
     return GSTRecord(record_id="gst_29b08642", 
         vendor_name=optional_text(row.get("supplier_name", "")),
         reference=optional_text(row.get("invoice_number", "")),
-        amount=float(row["amount"]),
+        amount=Decimal(row["amount"]),
         record_date=date.fromisoformat(row["invoice_date"]),
         tax_identity=optional_text(row.get("gstin", "")),
     )

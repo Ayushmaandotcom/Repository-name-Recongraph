@@ -14,6 +14,8 @@ from recongraph.domain.vendor.observation import (
 GSTIN_PATTERN = re.compile(r"^([0-9]{2})([A-Z]{5}[0-9]{4}[A-Z]{1})([1-9A-Z]{1})(Z)([0-9A-Z]{1})$")
 PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
 
+from recongraph.domain.tax.parser import DeterministicTaxParser
+
 # We map known suffixes to their canonical legal form category.
 # These must match at the END of the string.
 LEGAL_FORM_SUFFIXES = {
@@ -77,29 +79,8 @@ class DeterministicVendorParser:
         if not current.strip():
             return cls._empty_observation(raw, VendorObservationState.EMPTY, events)
             
-        # Extract potential PAN or GSTIN candidate
-        # A raw string might literally just be a GSTIN or PAN if used as vendor identifier,
-        # but typically this would be passed in a separate field. However, if the text is exactly a tax ID:
-        gstin_candidate = None
-        gstin_valid = None
-        pan_candidate = None
-        pan_valid = None
-        pan_derived = False
-        
-        # We strip surrounding whitespace for tax ID checks
-        tax_check_str = current.strip().upper()
-        if len(tax_check_str) == 15 and tax_check_str.isalnum():
-            gstin_candidate = tax_check_str
-            gstin_valid = bool(GSTIN_PATTERN.match(tax_check_str))
-            if gstin_valid:
-                # Extract PAN from valid GSTIN (chars 2 to 11)
-                pan_candidate = tax_check_str[2:12]
-                pan_valid = True
-                pan_derived = True
-        elif len(tax_check_str) == 10 and tax_check_str.isalnum():
-            pan_candidate = tax_check_str
-            pan_valid = bool(PAN_PATTERN.match(tax_check_str))
-            pan_derived = False
+        # Use the shared tax parser to check if this string happens to be a tax identity
+        tax_artifact = DeterministicTaxParser.parse(current, field_id="vendor_name")
             
         # 2. Case Normalization
         cased = current.upper()
@@ -194,11 +175,7 @@ class DeterministicVendorParser:
             recognized_designators=tuple(designators),
             token_spans=tuple(token_spans),
             normalization_events=tuple(events),
-            gstin_candidate=gstin_candidate,
-            gstin_structurally_valid=gstin_valid,
-            pan_candidate=pan_candidate,
-            pan_structurally_valid=pan_valid,
-            pan_derived_from_gstin=pan_derived
+            tax_artifact=tax_artifact
         )
 
     @classmethod
@@ -212,9 +189,5 @@ class DeterministicVendorParser:
             recognized_designators=(),
             token_spans=(),
             normalization_events=tuple(events) if events else (),
-            gstin_candidate=None,
-            gstin_structurally_valid=None,
-            pan_candidate=None,
-            pan_structurally_valid=None,
-            pan_derived_from_gstin=False
+            tax_artifact=None
         )

@@ -6,7 +6,6 @@ from recongraph.graph.decision import DecisionPolicy, DecisionEngine, DecisionAc
 from recongraph.graph.candidate import CandidateGraphBuilder, build_purchase_urn, build_gst_urn
 from recongraph.candidate_generation.generator import CandidateGenerator
 from recongraph.graph.algorithms import extract_connected_components
-from recongraph.plugins.core_providers import FinancialEvidenceProvider, TemporalEvidenceProvider, TaxEvidenceProvider, VendorEvidenceProvider, ReferenceEvidenceProvider
 from recongraph.graph.search import HypothesisSearcher
 from recongraph.graph.evaluator import HypothesisEvaluator
 from recongraph.benchmark.models import (
@@ -21,13 +20,13 @@ class BenchmarkRunner:
         dataset_id: str,
         purchases: Sequence[PurchaseRecord],
         gsts: Sequence[GSTRecord],
-        corpus_profile: ReferenceCorpusProfile,
+        providers: Sequence[any],
         decision_policy: DecisionPolicy,
     ):
         self.dataset_id = dataset_id
         self.purchases = purchases
         self.gsts = gsts
-        self.corpus_profile = corpus_profile
+        self.providers = providers
         self.decision_policy = decision_policy
 
     def run(self) -> BenchmarkReport:
@@ -36,18 +35,7 @@ class BenchmarkRunner:
         # 1. Candidate Generation
         gen_t0 = time.perf_counter()
         
-        providers = [
-            FinancialEvidenceProvider(),
-            TemporalEvidenceProvider(),
-            TaxEvidenceProvider(),
-            VendorEvidenceProvider(),
-            ReferenceEvidenceProvider(ReferenceEvidenceContext(
-                profile=self.corpus_profile,
-                policy=ReferenceEvidencePolicy()
-            ))
-        ]
-        
-        generator = CandidateGenerator(providers)
+        generator = CandidateGenerator(self.providers)
         edges = list(generator.generate(self.purchases, self.gsts))
         candidate_generation_ms = (time.perf_counter() - gen_t0) * 1000.0
         
@@ -71,7 +59,7 @@ class BenchmarkRunner:
         components = list(extract_connected_components(graph))
         searcher = HypothesisSearcher()
         from recongraph.matching.pair_scorers import PURCHASE_TO_GST_POLICY
-        evaluator = HypothesisEvaluator(providers, PURCHASE_TO_GST_POLICY)
+        evaluator = HypothesisEvaluator(self.providers, PURCHASE_TO_GST_POLICY)
         engine = DecisionEngine(self.decision_policy)
         
         max_comp_size = 0

@@ -42,6 +42,7 @@ class EvaluatedHypothesis:
     """
     hypothesis: Hypothesis
     score: float
+    coverage: float
     eligibility: EligibilityStatus
     supporting_evidence: dict[str, Any]
     violations: frozenset[str]

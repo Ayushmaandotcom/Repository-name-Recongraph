@@ -8,6 +8,7 @@ def create_mock_hypothesis(score: float, eligibility: EligibilityStatus) -> Eval
     return EvaluatedHypothesis(
         hypothesis=h,
         score=score,
+        coverage=1.0,
         eligibility=eligibility,
         supporting_evidence={},
         violations=frozenset()

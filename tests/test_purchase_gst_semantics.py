@@ -423,6 +423,8 @@ def test_one_to_one_blocking_findings_are_explicit():
             SemanticFinding.SEVERE_AMOUNT_CONFLICT,
             SemanticFinding.TAX_IDENTITY_CONFLICT,
             SemanticFinding.DISTINCT_EVENT_IDENTITY_EVIDENCE,
+            SemanticFinding.PAN_IDENTIFIER_CONFLICT,
+            SemanticFinding.LEGAL_FORM_LEXICAL_DIFFERENCE,
         }
     )
 

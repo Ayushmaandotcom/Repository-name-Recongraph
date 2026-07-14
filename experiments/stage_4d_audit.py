@@ -1,3 +1,4 @@
+from decimal import Decimal
 import math
 from datetime import date
 from recongraph.domain.records import PurchaseRecord, GSTRecord
@@ -25,24 +26,24 @@ def run_audit():
 
     challenges = {
         "HN001": (
-            PurchaseRecord(record_id="pur_bec420c3", vendor_name="ABC", reference="INV-1042", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
-            GSTRecord(record_id="gst_1ab36d4e", vendor_name="ABC", reference="AB/1042", amount=2000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
+            PurchaseRecord(record_id="pur_bec420c3", vendor_name="ABC", reference="INV-1042", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
+            GSTRecord(record_id="gst_1ab36d4e", vendor_name="ABC", reference="AB/1042", amount=Decimal("2000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
         ),
         "HN002": (
-            PurchaseRecord(record_id="pur_d9008b6e", vendor_name="XYZ", reference="INV-1042", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
-            GSTRecord(record_id="gst_cab03bdf", vendor_name="XYZ", reference="AB/1042", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX2"),
+            PurchaseRecord(record_id="pur_d9008b6e", vendor_name="XYZ", reference="INV-1042", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
+            GSTRecord(record_id="gst_cab03bdf", vendor_name="XYZ", reference="AB/1042", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX2"),
         ),
         "HN003": (
-            PurchaseRecord(record_id="pur_ffb6116d", vendor_name="DEF", reference="INV-MAY", amount=1000.0, record_date=date(2023,5,1), tax_identity="TAX1"),
-            GSTRecord(record_id="gst_c24cb47e", vendor_name="DEF", reference="INV-JUN", amount=1000.0, record_date=date(2023,6,1), tax_identity="TAX1"),
+            PurchaseRecord(record_id="pur_ffb6116d", vendor_name="DEF", reference="INV-MAY", amount=Decimal("1000.0"), record_date=date(2023,5,1), tax_identity="TAX1"),
+            GSTRecord(record_id="gst_c24cb47e", vendor_name="DEF", reference="INV-JUN", amount=Decimal("1000.0"), record_date=date(2023,6,1), tax_identity="TAX1"),
         ),
         "HN004": (
-            PurchaseRecord(record_id="pur_4625e9e7", vendor_name="GHI", reference="OMD-001", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
-            GSTRecord(record_id="gst_f9dc1142", vendor_name="GHI", reference="NSS-001", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
+            PurchaseRecord(record_id="pur_4625e9e7", vendor_name="GHI", reference="OMD-001", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
+            GSTRecord(record_id="gst_f9dc1142", vendor_name="GHI", reference="NSS-001", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
         ),
         "HN005": (
-            PurchaseRecord(record_id="pur_bea4c94e", vendor_name="JKL", reference="INV-1042", amount=2000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
-            GSTRecord(record_id="gst_006cb9ba", vendor_name="JKL", reference="AB/1042", amount=1000.0, record_date=date(2023,1,1), tax_identity="TAX1"),
+            PurchaseRecord(record_id="pur_bea4c94e", vendor_name="JKL", reference="INV-1042", amount=Decimal("2000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
+            GSTRecord(record_id="gst_006cb9ba", vendor_name="JKL", reference="AB/1042", amount=Decimal("1000.0"), record_date=date(2023,1,1), tax_identity="TAX1"),
         )
     }
     
@@ -93,8 +94,8 @@ def run_audit():
         
     print("\n=== PART 5: EMPTY REFERENCE AUDIT ===")
     for name, (ref_a, ref_b) in empty_pathologicals.items():
-        p = PurchaseRecord(record_id="pur_b4374f15", vendor_name="A", reference=ref_a, amount=100.0, record_date=date(2023,1,1), tax_identity="TAX")
-        g = GSTRecord(record_id="gst_9a421bc1", vendor_name="A", reference=ref_b, amount=100.0, record_date=date(2023,1,1), tax_identity="TAX")
+        p = PurchaseRecord(record_id="pur_b4374f15", vendor_name="A", reference=ref_a, amount=Decimal("100.0"), record_date=date(2023,1,1), tax_identity="TAX")
+        g = GSTRecord(record_id="gst_9a421bc1", vendor_name="A", reference=ref_b, amount=Decimal("100.0"), record_date=date(2023,1,1), tax_identity="TAX")
         try:
             res = score_purchase_to_gst(p, g, context)
             ref_sig = res.signals[SignalName.REFERENCE]

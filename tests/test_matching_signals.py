@@ -2,7 +2,6 @@ from datetime import date
 import pytest
 
 from recongraph.matching.signals import (
-    entity_score,
     tax_identity_score,
     temporal_score,
 )
@@ -10,11 +9,17 @@ from recongraph.matching.signals import (
 
 
 
+from recongraph.domain.tax.parser import DeterministicTaxParser
+
+def _tax(val: str | None) -> "ParsedTaxIdentifierArtifact | None":
+    if val is None:
+        return None
+    return DeterministicTaxParser.parse(val)
 
 def test_tax_identity_score_returns_one_for_matching_identities() -> None:
     score = tax_identity_score(
-        "07ABCDE1234F1Z5",
-        "07abcde1234f1z5",
+        _tax("07ABCDE1234F1Z5"),
+        _tax("07abcde1234f1z5"),
     )
 
     assert score == 1.0
@@ -22,8 +27,8 @@ def test_tax_identity_score_returns_one_for_matching_identities() -> None:
 
 def test_tax_identity_score_returns_zero_for_conflicting_identities() -> None:
     score = tax_identity_score(
-        "07ABCDE1234F1Z5",
-        "09WXYZA7890B1Z4",
+        _tax("07ABCDE1234F1Z5"),
+        _tax("09WXYZA7890B1Z4"),
     )
 
     assert score == 0.0
@@ -31,7 +36,7 @@ def test_tax_identity_score_returns_zero_for_conflicting_identities() -> None:
 
 def test_tax_identity_score_returns_none_when_identity_is_missing() -> None:
     score = tax_identity_score(
-        "07ABCDE1234F1Z5",
+        _tax("07ABCDE1234F1Z5"),
         None,
     )
 
@@ -43,7 +48,7 @@ def test_tax_identity_score_returns_none_when_both_identities_are_missing() -> N
 
 
 def test_tax_identity_score_treats_blank_identity_as_unknown() -> None:
-    assert tax_identity_score("", "   ") is None
+    assert tax_identity_score(_tax(""), _tax("   ")) is None
 
 
 def test_temporal_score_returns_one_for_same_date() -> None:

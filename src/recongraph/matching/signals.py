@@ -4,7 +4,6 @@ from rapidfuzz import fuzz
 
 from recongraph.normalization.text import (
     normalize_tax_identity,
-    normalize_vendor_name,
 )
 
 
@@ -18,16 +17,23 @@ def _is_year_like_token(token: str) -> bool:
     return 1900 <= year <= 2100
 
 
-def tax_identity_score(
-    tax_identity_a: str | None,
-    tax_identity_b: str | None,
-) -> float | None:
-    """Compare tax identities while preserving unknown evidence states."""
-    if tax_identity_a is None or tax_identity_b is None:
-        return None
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from recongraph.domain.tax.parser import ParsedTaxIdentifierArtifact
 
-    normalized_a = normalize_tax_identity(tax_identity_a)
-    normalized_b = normalize_tax_identity(tax_identity_b)
+def tax_identity_score(
+    artifact_a: "ParsedTaxIdentifierArtifact | None",
+    artifact_b: "ParsedTaxIdentifierArtifact | None",
+) -> float | None:
+    """Compare tax identities using rich parsed artifacts."""
+    if artifact_a is None or artifact_b is None:
+        return None
+        
+    val_a = artifact_a.gstin_candidate or artifact_a.pan_candidate or artifact_a.observation.raw_value
+    val_b = artifact_b.gstin_candidate or artifact_b.pan_candidate or artifact_b.observation.raw_value
+
+    normalized_a = normalize_tax_identity(val_a)
+    normalized_b = normalize_tax_identity(val_b)
 
     if not normalized_a or not normalized_b:
         return None
@@ -57,23 +63,4 @@ def temporal_score(
 
 
 
-def entity_score(
-    entity_a: str | None,
-    entity_b: str | None,
-) -> float | None:
-    """Calculate normalized textual similarity between vendor entities."""
-    if entity_a is None or entity_b is None:
-        return None
 
-    normalized_a = normalize_vendor_name(entity_a)
-    normalized_b = normalize_vendor_name(entity_b)
-
-    if not normalized_a or not normalized_b:
-        return None
-
-    similarity = fuzz.ratio(
-        normalized_a,
-        normalized_b,
-    )
-
-    return similarity / 100.0

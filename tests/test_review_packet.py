@@ -1,3 +1,4 @@
+from decimal import Decimal
 import pytest
 from datetime import date
 from recongraph.graph.review import ReviewPacketBuilder, ReviewOutcome
@@ -73,8 +74,8 @@ def test_checklist_generation_limits():
     assert "Verify exact invoice amounts and potential split payments" in packet.checklist
 
 def test_packet_materialization():
-    p1 = PurchaseRecord(record_id="p1", amount=100.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
-    g1 = GSTRecord(record_id="g1", amount=100.0, record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    p1 = PurchaseRecord(record_id="p1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
+    g1 = GSTRecord(record_id="g1", amount=Decimal("100.0"), record_date=date(2023,1,1), reference="INV1", vendor_name="A", tax_identity="TAX1")
     
     graph_builder = CandidateGraphBuilder()
     u1, u2 = build_purchase_urn("p1"), build_gst_urn("g1")
@@ -88,6 +89,7 @@ def test_packet_materialization():
             proposed_edges=frozenset([frozenset([u1, u2])])
         ),
         score=0.9,
+            coverage=1.0,
         eligibility=EligibilityStatus.ELIGIBLE,
         supporting_evidence={},
         violations=frozenset()

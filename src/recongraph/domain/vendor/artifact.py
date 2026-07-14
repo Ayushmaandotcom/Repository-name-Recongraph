@@ -46,13 +46,17 @@ def observation_to_canonical_payload(observation: VendorNameObservation) -> Cano
         "legal_form_category": observation.legal_form_category.name if observation.legal_form_category else None,
         "recognized_designators": tuple(observation.recognized_designators),
         "token_spans": tuple(spans_payload),
-        "normalization_events": tuple(events_payload),
-        "gstin_candidate": observation.gstin_candidate,
-        "gstin_structurally_valid": observation.gstin_structurally_valid,
-        "pan_candidate": observation.pan_candidate,
-        "pan_structurally_valid": observation.pan_structurally_valid,
-        "pan_derived_from_gstin": observation.pan_derived_from_gstin
+        "normalization_events": tuple(events_payload)
     }
+    
+    if observation.tax_artifact:
+        payload_data["tax_artifact"] = {
+            "gstin_candidate": observation.tax_artifact.gstin_candidate,
+            "pan_candidate": observation.tax_artifact.pan_candidate,
+            "gstin_valid": observation.tax_artifact.gstin_valid,
+            "pan_valid": observation.tax_artifact.pan_valid,
+            "pan_derived_from_gstin": observation.tax_artifact.pan_derived_from_gstin
+        }
     
     return CanonicalPayloadEnvelope(payload_data)
 

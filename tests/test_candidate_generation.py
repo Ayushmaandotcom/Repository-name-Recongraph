@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date
 from recongraph.domain.records import PurchaseRecord, GSTRecord
 from recongraph.candidate_generation.blockers import (
@@ -12,13 +13,13 @@ from recongraph.matching.reference_evidence import ReferenceCorpusProfile, Refer
 
 def test_exact_amount_blocker():
     blocker = ExactAmountBlocker()
-    record = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="B", amount=150.00, record_date=date(2026, 1, 1), tax_identity="AB123")
+    record = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="B", amount=Decimal("150.00"), record_date=date(2026, 1, 1), tax_identity="AB123")
     keys = blocker.extract_keys(record)
     assert keys == frozenset(["AMT:150.00"])
 
 def test_tax_identity_blocker():
     blocker = TaxIdentityBlocker()
-    record = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="B", amount=150.00, record_date=date(2026, 1, 1), tax_identity=" AB123 ")
+    record = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="B", amount=Decimal("150.00"), record_date=date(2026, 1, 1), tax_identity=" AB123 ")
     keys = blocker.extract_keys(record)
     assert keys == frozenset(["TAX:AB123"])
 
@@ -34,13 +35,13 @@ def test_reference_token_blocker_statistical():
     blocker = ReferenceTokenBlocker(profile=prof, rarity_threshold=0.8)
     
     # Rare token test
-    record_rare = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-874219", amount=150.00, record_date=date(2026, 1, 1), tax_identity="AB123")
+    record_rare = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-874219", amount=Decimal("150.00"), record_date=date(2026, 1, 1), tax_identity="AB123")
     keys_rare = blocker.extract_keys(record_rare)
     assert "REF_NORM:inv874219" in keys_rare
     assert "REF_TOK:874219" in keys_rare
     
     # Common token test
-    record_common = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-001", amount=150.00, record_date=date(2026, 1, 1), tax_identity="AB123")
+    record_common = PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-001", amount=Decimal("150.00"), record_date=date(2026, 1, 1), tax_identity="AB123")
     keys_common = blocker.extract_keys(record_common)
     assert "REF_NORM:inv001" not in keys_common
     assert "REF_TOK:001" not in keys_common
@@ -61,17 +62,17 @@ def test_candidate_generator_reduction():
     
     # 1 Purchase
     purchases = [
-        PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-123", amount=500.0, record_date=date(2026, 1, 1), tax_identity="TAX-A")
+        PurchaseRecord(record_id="dummy_p", vendor_name="A", reference="INV-123", amount=Decimal("500.0"), record_date=date(2026, 1, 1), tax_identity="TAX-A")
     ]
     
     # 3 GST Records
     gst_records = [
         # Match by Reference
-        GSTRecord(record_id="dummy_g", vendor_name="A", reference="INV-123", amount=999.0, record_date=date(2026, 1, 1), tax_identity="TAX-B"),
+        GSTRecord(record_id="dummy_g", vendor_name="A", reference="INV-123", amount=Decimal("999.0"), record_date=date(2026, 1, 1), tax_identity="TAX-B"),
         # Match by Amount
-        GSTRecord(record_id="dummy_g", vendor_name="B", reference="INV-999", amount=500.0, record_date=date(2026, 1, 1), tax_identity="TAX-C"),
+        GSTRecord(record_id="dummy_g", vendor_name="B", reference="INV-999", amount=Decimal("500.0"), record_date=date(2026, 1, 1), tax_identity="TAX-C"),
         # No Match (Should be filtered out)
-        GSTRecord(record_id="dummy_g", vendor_name="C", reference="INV-888", amount=100.0, record_date=date(2026, 1, 1), tax_identity="TAX-D"),
+        GSTRecord(record_id="dummy_g", vendor_name="C", reference="INV-888", amount=Decimal("100.0"), record_date=date(2026, 1, 1), tax_identity="TAX-D"),
     ]
     
     edges = list(generator.generate(purchases, gst_records))

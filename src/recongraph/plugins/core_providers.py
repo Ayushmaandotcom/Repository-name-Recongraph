@@ -5,8 +5,13 @@ from recongraph.candidate_generation.blockers import Blocker, ExactAmountBlocker
 from recongraph.matching.scoring import SignalName
 from recongraph.matching.reference_evidence import ReferenceEvidenceContext, compute_reference_interpretation
 from recongraph.domain.financial.pipeline import FinancialEvidencePipeline
-from recongraph.matching.signals import tax_identity_score, entity_score, temporal_score
-from recongraph.matching.pair_scorers import PURCHASE_TO_GST_MAX_DAYS
+from recongraph.matching.signals import tax_identity_score, temporal_score
+
+from recongraph.domain.vendor.context import VendorIdentityContext
+from recongraph.domain.vendor.parser import DeterministicVendorParser
+from recongraph.domain.vendor.artifact import build_vendor_observation_artifact
+from recongraph.domain.vendor.interpretation import VendorPairInterpreter
+from recongraph.domain.vendor.policy import VendorProjectionPolicyV1
 
 T = TypeVar('T')
 
@@ -63,7 +68,7 @@ class FinancialEvidenceProvider:
         )
 
 class TemporalEvidenceProvider:
-    def __init__(self, max_days: int = PURCHASE_TO_GST_MAX_DAYS):
+    def __init__(self, max_days: int = 7):
         self.max_days = max_days
         
     def get_name(self) -> str:
@@ -100,10 +105,12 @@ class TaxEvidenceProvider:
         return [TaxIdentityBlocker()]
         
     def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
+        from recongraph.domain.tax.parser import DeterministicTaxParser
+        
         score = _weakest_available(
             purchases,
             gsts,
-            lambda r: r.tax_identity,
+            lambda r: DeterministicTaxParser.parse(r.tax_identity, field_id="tax_identity"),
             tax_identity_score
         )
         
@@ -120,23 +127,59 @@ class TaxEvidenceProvider:
         )
 
 class VendorEvidenceProvider:
+    def __init__(self, context: VendorIdentityContext):
+        self.context = context
+        self._artifact_cache = {}
+        
     def get_name(self) -> str:
         return SignalName.ENTITY
         
     def get_blockers(self) -> Iterable[Blocker]:
         return []
         
+    def _get_artifact(self, raw_name: str | None):
+        if raw_name not in self._artifact_cache:
+            obs = DeterministicVendorParser.parse(raw_name)
+            self._artifact_cache[raw_name] = (obs, build_vendor_observation_artifact(obs).identity)
+        return self._artifact_cache[raw_name]
+        
     def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
-        score = _weakest_available(
-            purchases,
-            gsts,
-            lambda r: r.vendor_name,
-            entity_score
-        )
+        best_similarity = None
+        best_metadata = None
+        
+        # Vendor semantics (V1-1D): Compute pairwise interpretation and take the weakest scalar available
+        # among the pairs. If there are multiple edges, we project each pair.
+        scores_with_meta = []
+        for p in purchases:
+            p_obs, p_id = self._get_artifact(p.vendor_name)
+            for g in gsts:
+                g_obs, g_id = self._get_artifact(g.vendor_name)
+                
+                interp = VendorPairInterpreter.interpret(p_obs, p_id, g_obs, g_id, self.context)
+                proj = VendorProjectionPolicyV1.project(interp)
+                
+                if proj.similarity is not None:
+                    scores_with_meta.append((proj.similarity, interp, proj))
+                    
+        if not scores_with_meta:
+            # Handle entirely uninterpretable or missing
+            return EvidenceContribution(
+                provider_name=self.get_name(),
+                score=None,
+                metadata={}
+            )
+            
+        # Extract the weakest available (matching the legacy semantics)
+        weakest = min(scores_with_meta, key=lambda x: x[0])
+        weakest_similarity, weakest_interp, weakest_proj = weakest
         
         return EvidenceContribution(
             provider_name=self.get_name(),
-            score=score
+            score=weakest_similarity,
+            metadata={
+                "vendor_interpretation": weakest_interp,
+                "vendor_projection": weakest_proj
+            }
         )
 
 class ReferenceEvidenceProvider:

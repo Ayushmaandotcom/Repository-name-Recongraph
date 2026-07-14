@@ -1,7 +1,7 @@
 from typing import Iterable
 from recongraph.graph.candidate import CandidateGraph
 from recongraph.graph.hypotheses import Hypothesis, EvaluatedHypothesis, EligibilityStatus
-from recongraph.matching.signals import tax_identity_score, entity_score
+from recongraph.matching.signals import tax_identity_score
 from recongraph.matching.scoring import SignalName, calculate_relationship_score
 from recongraph.matching.purchase_gst_semantics import (
     analyze_purchase_gst_semantics, 
@@ -23,11 +23,11 @@ class HypothesisEvaluator:
         self.policy = policy
 
     def evaluate(self, graph: CandidateGraph, hypothesis: Hypothesis) -> EvaluatedHypothesis:
-        # HS-004: If hypothesis is empty, it resolves nothing.
         if not hypothesis.matched_nodes:
             return EvaluatedHypothesis(
                 hypothesis=hypothesis,
                 score=0.0,
+                coverage=0.0,
                 eligibility=EligibilityStatus.INELIGIBLE,
                 supporting_evidence={},
                 violations=frozenset(["EMPTY_HYPOTHESIS"])
@@ -47,6 +47,7 @@ class HypothesisEvaluator:
             return EvaluatedHypothesis(
                 hypothesis=hypothesis,
                 score=0.0,
+                coverage=0.0,
                 eligibility=EligibilityStatus.INELIGIBLE,
                 supporting_evidence={},
                 violations=frozenset(["MISSING_COUNTERPARTY"])
@@ -91,7 +92,8 @@ class HypothesisEvaluator:
 
         return EvaluatedHypothesis(
             hypothesis=hypothesis,
-            score=relationship.score,
+            score=relationship.score if relationship.score is not None else 0.0,
+            coverage=relationship.coverage,
             eligibility=eligibility,
             supporting_evidence=supporting_evidence,
             violations=frozenset(violations)

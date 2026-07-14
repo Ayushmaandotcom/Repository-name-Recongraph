@@ -1,3 +1,4 @@
+from decimal import Decimal
 import csv
 from dataclasses import dataclass
 from datetime import date
@@ -65,7 +66,7 @@ def load_purchases(path: Path) -> list[IdentifiedPurchase]:
                     record=PurchaseRecord(record_id="pur_d2dec543", 
                         vendor_name=optional_text(row["vendor_name"]),
                         reference=optional_text(row["invoice_number"]),
-                        amount=float(row["amount"]),
+                        amount=Decimal(row["amount"]),
                         record_date=date.fromisoformat(row["invoice_date"]),
                         tax_identity=optional_text(row["gstin"]),
                     ),
@@ -88,7 +89,7 @@ def load_gst_records(path: Path) -> list[IdentifiedGSTRecord]:
                     record=GSTRecord(record_id="gst_23e6fe6c", 
                         vendor_name=optional_text(row["supplier_name"]),
                         reference=optional_text(row["invoice_number"]),
-                        amount=float(row["amount"]),
+                        amount=Decimal(row["amount"]),
                         record_date=date.fromisoformat(row["invoice_date"]),
                         tax_identity=optional_text(row["gstin"]),
                     ),
