@@ -1,10 +1,33 @@
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, Callable, TypeVar
 from recongraph.plugins.provider import EvidenceProvider, EvidenceContribution
 from recongraph.domain.records import PurchaseRecord, GSTRecord
 from recongraph.candidate_generation.blockers import Blocker, ExactAmountBlocker, TaxIdentityBlocker, ReferenceTokenBlocker
 from recongraph.matching.scoring import SignalName
 from recongraph.matching.reference_evidence import ReferenceEvidenceContext, compute_reference_interpretation
 from recongraph.domain.financial.pipeline import FinancialEvidencePipeline
+from recongraph.matching.signals import tax_identity_score, entity_score, temporal_score
+from recongraph.matching.pair_scorers import PURCHASE_TO_GST_MAX_DAYS
+
+T = TypeVar('T')
+
+def _weakest_available(
+    purchases: Sequence[PurchaseRecord],
+    gsts: Sequence[GSTRecord],
+    extractor: Callable[[PurchaseRecord | GSTRecord], T],
+    scorer: Callable[[T, T], float | None]
+) -> float | None:
+    scores = []
+    for p in purchases:
+        p_val = extractor(p)
+        for g in gsts:
+            g_val = extractor(g)
+            s = scorer(p_val, g_val)
+            if s is not None:
+                scores.append(s)
+                
+    if not scores:
+        return None
+    return min(scores)
 
 class FinancialEvidenceProvider:
     def __init__(self, tolerance: float = 0.05):
@@ -29,7 +52,7 @@ class FinancialEvidenceProvider:
         )
 
 class TemporalEvidenceProvider:
-    def __init__(self, max_days: int = 14):
+    def __init__(self, max_days: int = PURCHASE_TO_GST_MAX_DAYS):
         self.max_days = max_days
         
     def get_name(self) -> str:
@@ -39,19 +62,20 @@ class TemporalEvidenceProvider:
         return []
         
     def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
-        max_day_diff = max(
-            abs((p.record_date - g.record_date).days) 
-            for p in purchases for g in gsts
+        score = _weakest_available(
+            purchases,
+            gsts,
+            lambda r: r.record_date,
+            lambda d1, d2: temporal_score(d1, d2, self.max_days)
         )
         
-        if max_day_diff > self.max_days:
+        if score == 0.0:
             return EvidenceContribution(
                 provider_name=self.get_name(),
                 score=0.0,
                 violations=frozenset(["TEMPORAL_MAX_DAYS_EXCEEDED"])
             )
             
-        score = 1.0 - (max_day_diff / self.max_days)
         return EvidenceContribution(
             provider_name=self.get_name(),
             score=score
@@ -65,18 +89,24 @@ class TaxEvidenceProvider:
         return [TaxIdentityBlocker()]
         
     def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
-        tax_ids_p = {p.tax_identity for p in purchases if p.tax_identity}
-        tax_ids_g = {g.tax_identity for g in gsts if g.tax_identity}
+        score = _weakest_available(
+            purchases,
+            gsts,
+            lambda r: r.tax_identity,
+            tax_identity_score
+        )
         
-        tax_id_p_val = next(iter(tax_ids_p)) if len(tax_ids_p) == 1 else None
-        tax_id_g_val = next(iter(tax_ids_g)) if len(tax_ids_g) == 1 else None
-        
-        if tax_id_p_val and tax_id_g_val:
-            if tax_id_p_val == tax_id_g_val:
-                return EvidenceContribution(provider_name=self.get_name(), score=1.0)
-            else:
-                return EvidenceContribution(provider_name=self.get_name(), score=0.0, violations=frozenset(["TAX_IDENTITY_CONFLICT"]))
-        return EvidenceContribution(provider_name=self.get_name(), score=None)
+        if score == 0.0:
+            return EvidenceContribution(
+                provider_name=self.get_name(),
+                score=0.0,
+                violations=frozenset(["TAX_IDENTITY_CONFLICT"])
+            )
+            
+        return EvidenceContribution(
+            provider_name=self.get_name(),
+            score=score
+        )
 
 class VendorEvidenceProvider:
     def get_name(self) -> str:
@@ -86,13 +116,17 @@ class VendorEvidenceProvider:
         return []
         
     def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
-        p_vendors = " ".join(p.vendor_name for p in purchases if p.vendor_name)
-        g_vendors = " ".join(g.vendor_name for g in gsts if g.vendor_name)
+        score = _weakest_available(
+            purchases,
+            gsts,
+            lambda r: r.vendor_name,
+            entity_score
+        )
         
-        if p_vendors and g_vendors:
-            score = 1.0 if p_vendors.lower() == g_vendors.lower() else 0.5 # Very basic fuzzy mock for now
-            return EvidenceContribution(provider_name=self.get_name(), score=score)
-        return EvidenceContribution(provider_name=self.get_name(), score=None)
+        return EvidenceContribution(
+            provider_name=self.get_name(),
+            score=score
+        )
 
 class ReferenceEvidenceProvider:
     def __init__(self, context: ReferenceEvidenceContext):
