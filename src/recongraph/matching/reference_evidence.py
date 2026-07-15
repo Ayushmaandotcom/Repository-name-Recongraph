@@ -262,6 +262,7 @@ class ReferenceEvidenceContribution:
     evidence_kind: ReferenceEvidenceKind
     identity_value: str
     positive_evidence: float
+    evidential_weight: float
     statistics_available: bool
 
     def __post_init__(self):
@@ -273,6 +274,11 @@ class ReferenceEvidenceContribution:
             raise ValueError("positive_evidence must be finite")
         if not (0.0 <= self.positive_evidence <= 1.0):
             raise ValueError("positive_evidence must be between 0.0 and 1.0")
+
+        if not math.isfinite(self.evidential_weight):
+            raise ValueError("evidential_weight must be finite")
+        if not (0.0 <= self.evidential_weight <= 1.0):
+            raise ValueError("evidential_weight must be between 0.0 and 1.0")
 
         if self.evidence_kind == ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN:
             if not self.identity_value.isdigit():
@@ -361,32 +367,33 @@ def _construct_reference_evidence_contributions(
         norm_ev = evidence.normalized_references[0]
         
         if norm_ev.statistics is not None:
-            positive_evidence = _profiled_rarity_magnitude(
+            evidential_weight = _profiled_rarity_magnitude(
                 frequency=norm_ev.statistics.frequency,
                 reference_count=evidence.reference_count,
             )
             stats_available = True
         else:
-            positive_evidence = policy.exact_reference_fallback
+            evidential_weight = policy.exact_reference_fallback
             stats_available = False
             
         contributions.append(ReferenceEvidenceContribution(
             evidence_kind=ReferenceEvidenceKind.NORMALIZED_REFERENCE,
             identity_value=norm_ev.normalized_reference,
-            positive_evidence=positive_evidence,
+            positive_evidence=1.0,
+            evidential_weight=evidential_weight,
             statistics_available=stats_available,
         ))
     else:
         # Construct one contribution for EACH shared numeric token
         for token_ev in evidence.shared_numeric_tokens:
             if token_ev.statistics is not None:
-                positive_evidence = _profiled_rarity_magnitude(
+                evidential_weight = _profiled_rarity_magnitude(
                     frequency=token_ev.statistics.document_frequency,
                     reference_count=evidence.reference_count,
                 )
                 stats_available = True
             else:
-                positive_evidence = _structural_token_magnitude(
+                evidential_weight = _structural_token_magnitude(
                     token=token_ev.token,
                     policy=policy,
                 )
@@ -395,7 +402,8 @@ def _construct_reference_evidence_contributions(
             contributions.append(ReferenceEvidenceContribution(
                 evidence_kind=ReferenceEvidenceKind.SHARED_NUMERIC_TOKEN,
                 identity_value=token_ev.token,
-                positive_evidence=positive_evidence,
+                positive_evidence=0.5,
+                evidential_weight=evidential_weight,
                 statistics_available=stats_available,
             ))
             
@@ -407,21 +415,10 @@ def _select_strongest_reference_contribution(
     if not contributions:
         raise ValueError("at least one reference evidence contribution is required")
 
-    winner = contributions[0]
+    def sort_key(c: ReferenceEvidenceContribution):
+        return (c.positive_evidence, c.evidential_weight, c.statistics_available)
 
-    for candidate in contributions[1:]:
-        if candidate.positive_evidence > winner.positive_evidence:
-            winner = candidate
-            continue
-
-        if (
-            candidate.positive_evidence == winner.positive_evidence
-            and candidate.statistics_available
-            and not winner.statistics_available
-        ):
-            winner = candidate
-
-    return winner
+    return max(contributions, key=sort_key)
 
 def _assemble_reference_evidence_interpretation(
     contributions: tuple[ReferenceEvidenceContribution, ...],

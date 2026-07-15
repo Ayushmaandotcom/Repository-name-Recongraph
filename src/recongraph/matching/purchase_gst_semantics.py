@@ -5,8 +5,8 @@ from enum import StrEnum
 from recongraph.matching.scoring import SignalName
 
 
-# Represents a statistical rarity boundary (score >= 0.8 implies token frequency <= 4% of corpus)
-STRONG_REFERENCE_SCORE = 0.8
+# Represents an agreement boundary (score >= 0.5 implies partial token match or exact match)
+STRONG_REFERENCE_SCORE = 0.5
 STRONG_ENTITY_SCORE = 0.9
 STRONG_AMOUNT_SCORE = 0.9
 
@@ -51,7 +51,7 @@ def analyze_purchase_gst_semantics(
     if (
         entity is not None
         and entity >= STRONG_ENTITY_SCORE
-        and reference == 0.0
+        and (reference is None or reference < STRONG_REFERENCE_SCORE)
         and amount is not None
         and amount >= STRONG_AMOUNT_SCORE
         and temporal == 0.0
