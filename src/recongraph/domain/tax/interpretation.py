@@ -52,10 +52,10 @@ class TaxPairInterpreter:
         if l_gstin == r_gstin:
             return GSTINRelation(GSTINRelationState.EXACT_MATCH, l_gstin, r_gstin)
             
-        # Check if PANs match even though GSTINs differ
-        l_pan = l_gstin[2:12]
-        r_pan = r_gstin[2:12]
-        if l_pan == r_pan:
+        # Check if PANs match even though GSTINs differ (using the deterministic parser's output)
+        l_pan = left.parsed_result.pan_candidate
+        r_pan = right.parsed_result.pan_candidate
+        if l_pan and r_pan and l_pan == r_pan:
             return GSTINRelation(GSTINRelationState.DIFFERENT_STATE_SAME_PAN, l_gstin, r_gstin)
             
         return GSTINRelation(GSTINRelationState.DISTINCT, l_gstin, r_gstin)
