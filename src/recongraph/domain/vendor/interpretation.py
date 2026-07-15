@@ -61,7 +61,7 @@ class VendorPairInterpreter:
         # 5. Corpus Distinctiveness
         corpus_rel = cls._evaluate_distinctiveness(shared_tokens, context)
         
-        warnings = []
+        warnings: list[str] = []
         # If fuzzy was skipped due to length, we might emit a warning, but for now we keep it simple.
 
         return VendorIdentityInterpretation(

@@ -11,7 +11,7 @@ class InvertedIndex:
         self.index: dict[str, set[Any]] = defaultdict(set)
         
     def add(self, record: Any) -> frozenset[str]:
-        keys = set()
+        keys: set[str] = set()
         for blocker in self.blockers:
             keys.update(blocker.extract_keys(record))
             

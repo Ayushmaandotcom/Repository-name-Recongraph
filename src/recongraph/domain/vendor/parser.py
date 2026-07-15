@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import Optional, List, Tuple
+from typing import Any, Tuple, Optional, List
 
 from recongraph.domain.vendor.observation import (
     VendorNameObservation,
@@ -159,7 +159,7 @@ class DeterministicVendorParser:
         # This is a complex string-alignment problem in full NLP, but for V1 we just store empty spans
         # or simple substring find results. To meet the requirements simply, we'll omit complex alignment
         # and just note the token values for now.
-        token_spans = []
+        token_spans: list[Any] = []
         
         # If after everything the core is empty (e.g. string was just "PVT LTD")
         state = VendorObservationState.PRESENT
@@ -179,7 +179,7 @@ class DeterministicVendorParser:
         )
 
     @classmethod
-    def _empty_observation(cls, raw: Optional[str], state: VendorObservationState, events: List[VendorNormalizationEvent] = None) -> VendorNameObservation:
+    def _empty_observation(cls, raw: Optional[str], state: VendorObservationState, events: Optional[List[VendorNormalizationEvent]] = None) -> VendorNameObservation:
         return VendorNameObservation(
             raw_name=raw if raw is not None else "",
             observation_state=state,

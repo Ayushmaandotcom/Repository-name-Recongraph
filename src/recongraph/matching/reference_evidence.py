@@ -200,13 +200,13 @@ def enrich_reference_identity(
     token_evidence = []
     for token in identity.shared_numeric_tokens:
         if token in profile.numeric_token_document_frequency:
-            stats = ReferenceTokenStatistics(
+            token_stats = ReferenceTokenStatistics(
                 token=token,
                 document_frequency=profile.numeric_token_document_frequency[token]
             )
         else:
-            stats = None
-        token_evidence.append(SharedNumericTokenEvidence(token=token, statistics=stats))
+            token_stats = None
+        token_evidence.append(SharedNumericTokenEvidence(token=token, statistics=token_stats))
 
     return EnrichedReferenceEvidence(
         identity=identity,

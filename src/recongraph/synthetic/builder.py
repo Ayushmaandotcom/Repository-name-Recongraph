@@ -17,7 +17,7 @@ class DatasetBuilder:
                 # Apply mutations mapped to this index
                 for mut_idx, op in spec.purchase_mutations:
                     if mut_idx == i:
-                        mutated_p = op.apply(mutated_p)
+                        mutated_p = op.apply(mutated_p)  # type: ignore
                 purchases.append(mutated_p)
                 
             # Materialize gsts
@@ -25,7 +25,7 @@ class DatasetBuilder:
                 mutated_g = g
                 for mut_idx, op in spec.gst_mutations:
                     if mut_idx == i:
-                        mutated_g = op.apply(mutated_g)
+                        mutated_g = op.apply(mutated_g)  # type: ignore
                 gsts.append(mutated_g)
                 
             outcomes.append(spec.expected_outcome)

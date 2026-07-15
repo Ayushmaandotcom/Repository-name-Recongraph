@@ -30,5 +30,5 @@ class ReferenceMutationOperator:
 class AmountMutationOperator(MutationOperator):
     new_amount: Decimal
 
-    def apply(self, record: GSTRecord) -> GSTRecord:
+    def apply(self, record: TRecord) -> TRecord:
         return dataclasses.replace(record, amount=Decimal(str(self.new_amount)))

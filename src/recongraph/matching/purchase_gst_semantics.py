@@ -23,7 +23,7 @@ class SemanticFinding(StrEnum):
 
 
 def analyze_purchase_gst_semantics(
-    evidence: Mapping[SignalName, float | None],
+    evidence: Mapping[str, float | None],
 ) -> tuple[SemanticFinding, ...]:
     findings: list[SemanticFinding] = []
 

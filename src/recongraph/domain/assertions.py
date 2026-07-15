@@ -74,7 +74,7 @@ class EvidenceAssertion:
     authority: AuthorityDescriptor
     ancestry: EvidenceAncestryRef
     payload: Optional[TypedPayloadEnvelope] = None
-    identity: EvidenceAssertionIdentity = None
+    identity: EvidenceAssertionIdentity | None = None
 
     def __post_init__(self):
         # We compute identity and use object.__setattr__ because the dataclass is frozen.

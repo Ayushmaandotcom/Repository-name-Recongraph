@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
 
 class ScopeKind(str, Enum):
@@ -108,7 +108,7 @@ class Proposition:
     A specific claim applied to a specific subject.
     Mechanically guarantees that the subject was canonically built for this exact claim.
     """
-    claim: 'ClaimDescriptor'
+    claim: Any
     subject: PropositionSubject
 
     def __post_init__(self):
@@ -118,6 +118,10 @@ class Proposition:
             raise ValueError("Proposition construction rejected: claim semantic version mismatch.")
 
     @classmethod
-    def create(cls, claim: 'ClaimDescriptor', kind: ScopeKind, left: frozenset[SubjectRef] | set[SubjectRef] | list[SubjectRef], right: Optional[frozenset[SubjectRef] | set[SubjectRef] | list[SubjectRef]] = None) -> 'Proposition':
+    def apply(cls, claim: Any, subject: PropositionSubject) -> 'Proposition':
+        return cls(claim=claim, subject=subject)
+
+    @classmethod
+    def create(cls, claim: Any, kind: ScopeKind, left: frozenset[SubjectRef] | set[SubjectRef] | list[SubjectRef], right: Optional[frozenset[SubjectRef] | set[SubjectRef] | list[SubjectRef]] = None) -> 'Proposition':
         subject = PropositionSubject.create(claim, kind, left, right)
         return cls(claim=claim, subject=subject)

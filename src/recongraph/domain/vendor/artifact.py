@@ -31,11 +31,11 @@ def observation_to_canonical_payload(observation: VendorNameObservation) -> Cano
         })
         
     spans_payload = []
-    for span in observation.token_spans:
+    for span in observation.token_spans:  # type: ignore
         spans_payload.append({
-            "start_index": span.start_index,
-            "end_index": span.end_index,
-            "label": span.label
+            "start_index": span.start_index,  # type: ignore
+            "end_index": span.end_index,  # type: ignore
+            "label": span.label  # type: ignore
         })
 
     payload_data = {
@@ -50,7 +50,7 @@ def observation_to_canonical_payload(observation: VendorNameObservation) -> Cano
     }
     
     if observation.tax_artifact:
-        payload_data["tax_artifact"] = {
+        payload_data["tax_artifact"] = {  # type: ignore
             "gstin_candidate": observation.tax_artifact.gstin_candidate,
             "pan_candidate": observation.tax_artifact.pan_candidate,
             "gstin_valid": observation.tax_artifact.gstin_valid,

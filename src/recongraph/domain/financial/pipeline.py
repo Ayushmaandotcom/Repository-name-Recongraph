@@ -197,5 +197,26 @@ class FinancialEvidencePipeline(EvidencePipeline[FinancialObservation, AmountInt
             notes=(),
             assumptions=()
         )
+
+    def contribute(self, interpretation: AmountInterpretation) -> EvidenceContributionV2[AmountInterpretation]:
+        from recongraph.domain.financial.amount_projection import project_amount_similarity
+        
+        projection = project_amount_similarity(interpretation)
+        violations = set(projection.warnings)
+        if interpretation.currency_relation.value == "DIFFERENT":
+            violations.add("CURRENCY_MISMATCH")
+        elif projection.similarity is not None and projection.similarity < 0.5 and interpretation.equality.value != "EQUAL":
+            violations.add("SEVERE_AMOUNT_CONFLICT")
+            
+        return EvidenceContributionV2(
+            provider_name="amount",
+            score=projection.similarity,
+            violations=frozenset(violations),
+            metadata={
+                "interpretation": interpretation,
+                "projection": projection
+            },
+            interpretation=interpretation
+        )
         
 

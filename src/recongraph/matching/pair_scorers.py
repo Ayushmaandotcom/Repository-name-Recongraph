@@ -48,7 +48,7 @@ PURCHASE_TO_GST_POLICY = RelationshipPolicy(
 class PairScoringResult:
     """Represent primitive evidence and its aggregated relationship score."""
 
-    signals: Mapping[SignalName, float | None]
+    signals: Mapping[str, float | None]
     semantic_findings: tuple[SemanticFinding, ...]
     eligibility: EligibilityResult
     relationship: RelationshipScore
@@ -87,7 +87,7 @@ def score_purchase_to_gst(
 
     from recongraph.domain.tax.parser import DeterministicTaxParser
     
-    signals = {
+    signals: dict[str, float | None] = {
         SignalName.ENTITY: vendor_contrib.score,
         SignalName.REFERENCE: ref_signal,
         SignalName.AMOUNT: amount_projection.similarity,
@@ -102,7 +102,7 @@ def score_purchase_to_gst(
         ),
     }
 
-    semantic_findings = list(analyze_purchase_gst_semantics(
+    semantic_findings_list = list(analyze_purchase_gst_semantics(
         signals
     ))
     
@@ -111,11 +111,11 @@ def score_purchase_to_gst(
         if v_proj and v_proj.contradiction_markers:
             for marker in v_proj.contradiction_markers:
                 try:
-                    semantic_findings.append(SemanticFinding(marker.lower()))
+                    semantic_findings_list.append(SemanticFinding(marker.lower()))
                 except ValueError:
                     pass
 
-    semantic_findings = tuple(semantic_findings)
+    semantic_findings = tuple(semantic_findings_list)
     
     eligibility = evaluate_purchase_gst_one_to_one_eligibility(
         semantic_findings

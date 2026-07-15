@@ -1,4 +1,8 @@
-from typing import Iterable, Sequence, Callable, TypeVar, Any
+import re
+
+content = open("src/recongraph/plugins/core_providers.py").read()
+
+new_content = """from typing import Iterable, Sequence, Callable, TypeVar, Any
 from dataclasses import dataclass
 import datetime
 
@@ -99,7 +103,6 @@ class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, float | Non
 
 class TemporalEvidenceProvider:
     def __init__(self, max_days: int = 7):
-        self.max_days = max_days
         self.pipeline = TemporalEvidencePipeline(max_days)
         
     def get_name(self) -> str:
@@ -307,3 +310,7 @@ class ReferenceEvidenceProvider:
             violations=contrib_v2.violations,
             metadata=contrib_v2.metadata
         )
+"""
+
+with open("src/recongraph/plugins/core_providers.py", "w") as f:
+    f.write(new_content)

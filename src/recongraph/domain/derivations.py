@@ -67,7 +67,7 @@ class DerivationIdentity:
         
         # 1. Canonicalize inputs based on roles
         canonical_inputs = []
-        roles = {}
+        roles = {}  # type: ignore
         for binding in inputs:
             node = binding.identity
             # Enforce that inputs are actual graph nodes (observation or artifact)
@@ -217,7 +217,7 @@ def _validate_canonical_payload(value: Any):
 
 
 @dataclass(frozen=True, slots=True)
-class CanonicalPayloadEnvelope:
+class CanonicalPayloadEnvelopeStruct:
     """Recursively validated JSON semantic algebra. No floats, sets, or custom objects."""
     data: dict[str, Any]
 

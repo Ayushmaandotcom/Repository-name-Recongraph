@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence, Any
 from recongraph.candidate_generation.blockers import Blocker
 from recongraph.candidate_generation.index import InvertedIndex
 from recongraph.domain.records import PurchaseRecord, GSTRecord
@@ -22,7 +22,7 @@ class CandidateGenerator:
     in sub-quadratic time by eliminating records with disjoint blocking keys.
     """
     def __init__(self, providers: Iterable[EvidenceProvider]):
-        blockers = []
+        blockers: list[Any] = []
         for provider in providers:
             blockers.extend(provider.get_blockers())
         self.blockers = tuple(blockers)
@@ -50,7 +50,7 @@ class CandidateGenerator:
                 continue
                 
             # Aggregate matches: GSTRecord -> shared_keys
-            matches = {}
+            matches = {}  # type: ignore
             for key in purchase_keys:
                 for gst in gst_index.query(key):
                     if gst not in matches:

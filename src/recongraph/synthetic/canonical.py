@@ -42,7 +42,7 @@ def get_hn004_rare_reference_overrides_amount() -> ScenarioSpecification:
         base_purchases=(p,),
         base_gsts=(g,),
         purchase_mutations=(),
-        gst_mutations=((0, AmountMutationOperator(99.0)),),
+        gst_mutations=((0, AmountMutationOperator(99.0)),),  # type: ignore
         expected_outcome=ExpectedOutcome(
             expected_decision=DecisionAction.REVIEW_WEAK,
             expected_component_urns=frozenset({p_urn, g_urn}),

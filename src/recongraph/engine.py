@@ -83,7 +83,8 @@ class ReconGraphEngine:
                 trace_id = DecisionTrace.compute_identity(
                     engine_version=self.VERSION,
                     config_hash=hashlib.md5(str(self.config).encode()).hexdigest(),
-                    component_nodes=frozenset(comp.graph.nodes.keys())
+                    component_nodes=frozenset(comp.graph.nodes.keys()),
+                    decision=decision
                 )
                 trace = DecisionTrace(
                     trace_id=trace_id,

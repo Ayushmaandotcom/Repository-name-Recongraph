@@ -11,6 +11,27 @@ class CanonicalPayloadEnvelope:
     """
     content: Any
 
+    def __post_init__(self):
+        def _validate(value: Any):
+            if value is None:
+                return
+            if isinstance(value, (bool, int, str)):
+                return
+            if isinstance(value, float):
+                raise ValueError("Floats are forbidden in CanonicalPayloadEnvelope.")
+            if isinstance(value, tuple):
+                for item in value:
+                    _validate(item)
+                return
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    if not isinstance(k, str):
+                        raise ValueError("Dict keys in CanonicalPayloadEnvelope must be strings.")
+                    _validate(v)
+                return
+            raise ValueError(f"Type {type(value)} is forbidden in CanonicalPayloadEnvelope.")
+        _validate(self.content)
+
     def canonicalize(self) -> bytes:
         return canonical_encode(self.content)
 

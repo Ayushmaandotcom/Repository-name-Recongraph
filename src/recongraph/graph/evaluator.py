@@ -55,7 +55,7 @@ class HypothesisEvaluator:
             
         # Evidence Aggregation via Plugins
         signals = {}
-        violations = set()
+        violations: set[str] = set()
         supporting_metadata = {}
         
         for provider in self.evidence_providers:

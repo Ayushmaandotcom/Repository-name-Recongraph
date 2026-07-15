@@ -1,5 +1,5 @@
 import time
-from typing import Sequence
+from typing import Sequence, Any
 from recongraph.domain.records import PurchaseRecord, GSTRecord
 from recongraph.matching.reference_evidence import ReferenceCorpusProfile, ReferenceEvidenceContext, ReferenceEvidencePolicy
 from recongraph.graph.decision import DecisionPolicy, DecisionEngine, DecisionAction
@@ -20,7 +20,7 @@ class BenchmarkRunner:
         dataset_id: str,
         purchases: Sequence[PurchaseRecord],
         gsts: Sequence[GSTRecord],
-        providers: Sequence[any],
+        providers: Sequence[Any],
         decision_policy: DecisionPolicy,
     ):
         self.dataset_id = dataset_id
