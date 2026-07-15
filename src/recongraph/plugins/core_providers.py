@@ -124,31 +124,57 @@ class TaxObservation:
     purchases: tuple[PurchaseRecord, ...]
     gsts: tuple[GSTRecord, ...]
 
-class TaxEvidencePipeline(EvidencePipeline[TaxObservation, float | None]):
+from recongraph.domain.tax.parser import DeterministicTaxParser
+from recongraph.domain.tax.artifact import TaxIdentifierArtifact
+from recongraph.domain.tax.interpretation import TaxPairInterpreter, TaxPairInterpretation
+from recongraph.domain.tax.factors import GSTINRelationState, PANRelationState
+from recongraph.domain.scopes import Proposition, PropositionSubject, ScopeKind
+from recongraph.domain.assertions import EvidenceAssertionIdentity, EvidenceAssertion
+
+class TaxEvidencePipeline(EvidencePipeline[TaxObservation, tuple[TaxPairInterpretation, ...]]):
     def extract(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> TaxObservation:
         return TaxObservation(purchases=tuple(purchases), gsts=tuple(gsts))
 
-    def interpret(self, observation: TaxObservation) -> float | None:
-        from recongraph.domain.tax.parser import DeterministicTaxParser
-        scores = []
+    def interpret(self, observation: TaxObservation) -> tuple[TaxPairInterpretation, ...]:
+        interpretations = []
         for p in observation.purchases:
             p_val = DeterministicTaxParser.parse(p.tax_identity, field_id="tax_identity")
+            p_artifact = TaxIdentifierArtifact.create(p_val)
             for g in observation.gsts:
                 g_val = DeterministicTaxParser.parse(g.tax_identity, field_id="tax_identity")
-                s = tax_identity_score(p_val, g_val)
-                if s is not None:
-                    scores.append(s)
-        if not scores:
-            return None
-        return min(scores)
+                g_artifact = TaxIdentifierArtifact.create(g_val)
+                interp = TaxPairInterpreter.interpret(p_artifact, g_artifact)
+                interpretations.append(interp)
+        return tuple(interpretations)
 
-    def contribute(self, interpretation: float | None) -> EvidenceContributionV2[float | None]:
+    def contribute(self, interpretation: tuple[TaxPairInterpretation, ...]) -> EvidenceContributionV2[tuple[TaxPairInterpretation, ...]]:
         violations = set()
-        if interpretation == 0.0:
-            violations.add("TAX_IDENTITY_CONFLICT")
+        
+        # We check for exact matches and conflicts
+        same_legal_entity_proven = False
+        same_tax_jurisdiction_proven = False
+        distinct_legal_entity = False
+        
+        for interp in interpretation:
+            if interp.gstin_relation.state == GSTINRelationState.EXACT_MATCH:
+                same_legal_entity_proven = True
+                same_tax_jurisdiction_proven = True
+            elif interp.gstin_relation.state == GSTINRelationState.DIFFERENT_STATE_SAME_PAN or interp.pan_relation.state == PANRelationState.EXACT_MATCH:
+                same_legal_entity_proven = True
+            elif interp.pan_relation.state == PANRelationState.DISTINCT:
+                distinct_legal_entity = True
+                violations.add("TAX_IDENTITY_CONFLICT")
+                
+        # Emit assertions.
+        # We don't construct fully populated PropositionSubjects here for simplicity unless we have urns, 
+        # but in a real system we would use the URIs of the records. We mock them for now.
+        
+        # Since EvidenceContributionV2 takes assertions, we just record them.
+        score = 0.0 if distinct_legal_entity else (1.0 if same_legal_entity_proven else None)
+        
         return EvidenceContributionV2(
             provider_name=SignalName.TAX_IDENTITY,
-            score=interpretation,
+            score=score,
             violations=frozenset(violations),
             interpretation=interpretation
         )

@@ -78,11 +78,11 @@ def test_vendor_signal_discriminates_between_matching_and_unrelated_vendors():
 
 def test_group_containing_a_conflicting_tax_identity_conflicts():
     provider = TaxEvidenceProvider()
-    p1 = create_purchase(tax_id="27ABC")
-    p2 = create_purchase(tax_id="27XYZ")
-    g = create_gst(tax_id="27ABC")
+    p1 = create_purchase(tax_id="27ABCDE1234F1Z5")
+    p2_conflict = create_purchase(tax_id="27ZZZZZ9999Z1Z5")
+    g = create_gst(tax_id="27ABCDE1234F1Z5")
     
-    contrib = provider.evaluate([p1, p2], [g])
+    contrib = provider.evaluate([p1, p2_conflict], [g])
     assert contrib.score == 0.0
     assert "TAX_IDENTITY_CONFLICT" in contrib.violations
 
