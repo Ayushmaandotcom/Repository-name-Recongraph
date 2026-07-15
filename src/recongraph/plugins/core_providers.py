@@ -148,35 +148,16 @@ class TaxEvidencePipeline(EvidencePipeline[TaxObservation, tuple[TaxPairInterpre
         return tuple(interpretations)
 
     def contribute(self, interpretation: tuple[TaxPairInterpretation, ...]) -> EvidenceContributionV2[tuple[TaxPairInterpretation, ...]]:
-        violations = set()
+        from recongraph.domain.tax.projection import TaxV1ProjectionContract
         
-        # We check for exact matches and conflicts
-        same_legal_entity_proven = False
-        same_tax_jurisdiction_proven = False
-        distinct_legal_entity = False
-        
-        for interp in interpretation:
-            if interp.gstin_relation.state == GSTINRelationState.EXACT_MATCH:
-                same_legal_entity_proven = True
-                same_tax_jurisdiction_proven = True
-            elif interp.gstin_relation.state == GSTINRelationState.DIFFERENT_STATE_SAME_PAN or interp.pan_relation.state == PANRelationState.EXACT_MATCH:
-                same_legal_entity_proven = True
-            elif interp.pan_relation.state == PANRelationState.DISTINCT:
-                distinct_legal_entity = True
-                violations.add("TAX_IDENTITY_CONFLICT")
-                
-        # Emit assertions.
-        # We don't construct fully populated PropositionSubjects here for simplicity unless we have urns, 
-        # but in a real system we would use the URIs of the records. We mock them for now.
-        
-        # Since EvidenceContributionV2 takes assertions, we just record them.
-        score = 0.0 if distinct_legal_entity else (1.0 if same_legal_entity_proven else None)
+        projection = TaxV1ProjectionContract.project(interpretation)
         
         return EvidenceContributionV2(
             provider_name=SignalName.TAX_IDENTITY,
-            score=score,
-            violations=frozenset(violations),
-            interpretation=interpretation
+            score=projection.score,
+            violations=projection.violations,
+            interpretation=interpretation,
+            metadata=projection.metadata
         )
 
 class TaxEvidenceProvider:

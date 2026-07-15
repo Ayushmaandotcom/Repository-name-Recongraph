@@ -24,3 +24,5 @@ Evidence Assertions are aggregated by `DecisionEngine` and processed into a math
 - `ADR-003`: Decision Trace Semantic Identity
 - `ADR-004`: Evidence Pipeline V2 Contract
 - `ADR-005`: Evidence Semantic Kernel V2
+- `ADR-006`: Tax Scalar Projection Boundary
+- `ADR-007`: Interpreter Parsing Authority
