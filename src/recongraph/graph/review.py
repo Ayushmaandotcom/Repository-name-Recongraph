@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 from recongraph.domain.records import PurchaseRecord, GSTRecord
 from recongraph.graph.decision import DecisionAction, ReconciliationDecision
-from recongraph.graph.explainability import DecisionExplanation
+from recongraph.graph.fusion_explainability import ExplanationArtifact
 from recongraph.graph.candidate import CandidateGraph
 from recongraph.graph.hypotheses import EvaluatedHypothesis
 
@@ -20,7 +20,7 @@ class ReviewPacket:
     action: DecisionAction
     purchases: tuple[PurchaseRecord, ...]
     gsts: tuple[GSTRecord, ...]
-    explanation: DecisionExplanation
+    explanation: ExplanationArtifact | None
     competitors: tuple[EvaluatedHypothesis, ...]
     checklist: tuple[str, ...]
 
@@ -30,17 +30,22 @@ class ReviewPacketBuilder:
     def __init__(self):
         self._counter = 0
         
-    def _generate_checklist(self, explanation: DecisionExplanation) -> tuple[str, ...]:
+    def _generate_checklist(self, explanation: ExplanationArtifact | None) -> tuple[str, ...]:
         checklist = []
-        limits = "".join(explanation.limiting_factors).lower()
-        
-        if "tax_identity_conflict" in limits:
+        if explanation is None:
+            return ("General manual review",)
+            
+        # Use Layer 3 missingness and contradictions
+        contradicted = explanation.technical_details.get("contradicted", [])
+        if "TAX_NODE" in contradicted:
             checklist.append("Verify GST tax filing manually")
-        if "amounts differ" in limits or "severe_amount_conflict" in limits:
+        if "FINANCIAL_NODE" in contradicted:
             checklist.append("Verify exact invoice amounts and potential split payments")
-        if "dates are far apart" in limits:
+        if "TEMPORAL_NODE" in contradicted:
             checklist.append("Verify transaction date against posting date")
-        if explanation.action == DecisionAction.REVIEW_AMBIGUOUS:
+            
+        action_str = explanation.executive_summary.get("decision")
+        if action_str == DecisionAction.REVIEW_AMBIGUOUS.value:
             checklist.append("Disambiguate competing hypotheses manually")
             
         if not checklist:
@@ -51,7 +56,7 @@ class ReviewPacketBuilder:
     def build(
         self, 
         decision: ReconciliationDecision, 
-        explanation: DecisionExplanation, 
+        explanation: ExplanationArtifact | None, 
         graph: CandidateGraph
     ) -> ReviewPacket | None:
         

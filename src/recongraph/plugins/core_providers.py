@@ -9,7 +9,8 @@ from recongraph.candidate_generation.blockers import Blocker, ExactAmountBlocker
 from recongraph.matching.scoring import SignalName
 from recongraph.matching.reference_evidence import ReferenceEvidenceContext, compute_reference_interpretation
 from recongraph.domain.financial.pipeline import FinancialEvidencePipeline
-from recongraph.matching.signals import tax_identity_score, temporal_score
+from recongraph.domain.temporal.interpretation import TemporalPairInterpretation
+from recongraph.domain.reference.interpretation import ReferencePairInterpretation
 
 from recongraph.domain.vendor.context import VendorIdentityContext
 from recongraph.domain.vendor.parser import DeterministicVendorParser
@@ -65,7 +66,7 @@ class TemporalObservation:
     p_dates: tuple[datetime.date, ...]
     g_dates: tuple[datetime.date, ...]
 
-class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, float | None]):
+class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, tuple[TemporalPairInterpretation, ...]]):
     def __init__(self, max_days: int):
         self.max_days = max_days
 
@@ -75,26 +76,30 @@ class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, float | Non
             g_dates=tuple(g.record_date for g in gsts)
         )
 
-    def interpret(self, observation: TemporalObservation) -> float | None:
-        scores = []
+    def interpret(self, observation: TemporalObservation) -> tuple[TemporalPairInterpretation, ...]:
+        from recongraph.domain.temporal.artifact import TemporalArtifact
+        from recongraph.domain.temporal.interpretation import TemporalPairInterpreter
+        
+        interps = []
         for p_date in observation.p_dates:
+            p_art = TemporalArtifact.create(p_date)
             for g_date in observation.g_dates:
-                s = temporal_score(p_date, g_date, self.max_days)
-                if s is not None:
-                    scores.append(s)
-        if not scores:
-            return None
-        return min(scores)
+                g_art = TemporalArtifact.create(g_date)
+                interps.append(TemporalPairInterpreter.interpret(p_art, g_art, self.max_days))
+                
+        return tuple(interps)
 
-    def contribute(self, interpretation: float | None) -> EvidenceContributionV2[float | None]:
-        violations = set()
-        if interpretation == 0.0:
-            violations.add("TEMPORAL_MAX_DAYS_EXCEEDED")
+    def contribute(self, interpretation: tuple[TemporalPairInterpretation, ...]) -> EvidenceContributionV2[tuple[TemporalPairInterpretation, ...]]:
+        from recongraph.domain.temporal.projection import TemporalV1ProjectionContract
+        
+        projection = TemporalV1ProjectionContract.project(interpretation)
+        
         return EvidenceContributionV2(
             provider_name=SignalName.TEMPORAL,
-            score=interpretation,
-            violations=frozenset(violations),
-            interpretation=interpretation
+            score=projection.score,
+            violations=projection.violations,
+            interpretation=interpretation,
+            metadata={"temporal_projection": projection}
         )
 
 class TemporalEvidenceProvider:
@@ -268,7 +273,7 @@ class ReferenceObservation:
     p_refs: str
     g_refs: str
 
-class ReferenceEvidencePipeline(EvidencePipeline[ReferenceObservation, Any]):
+class ReferenceEvidencePipeline(EvidencePipeline[ReferenceObservation, tuple[ReferencePairInterpretation, ...]]):
     def __init__(self, context: ReferenceEvidenceContext):
         self.context = context
 
@@ -277,19 +282,27 @@ class ReferenceEvidencePipeline(EvidencePipeline[ReferenceObservation, Any]):
         g_refs = " ".join(g.reference for g in gsts if g.reference)
         return ReferenceObservation(p_refs=p_refs, g_refs=g_refs)
 
-    def interpret(self, observation: ReferenceObservation) -> Any:
-        if observation.p_refs and observation.g_refs:
-            return compute_reference_interpretation(observation.p_refs, observation.g_refs, self.context)
-        return None
+    def interpret(self, observation: ReferenceObservation) -> tuple[ReferencePairInterpretation, ...]:
+        from recongraph.domain.reference.parser import DeterministicReferenceParser
+        from recongraph.domain.reference.artifact import ReferenceIdentifierArtifact
+        from recongraph.domain.reference.interpretation import ReferencePairInterpreter
 
-    def contribute(self, interpretation: Any) -> EvidenceContributionV2[Any]:
-        if interpretation is None:
-            return EvidenceContributionV2(provider_name=SignalName.REFERENCE, score=None)
+        p_art = ReferenceIdentifierArtifact.create(DeterministicReferenceParser.parse(observation.p_refs))
+        g_art = ReferenceIdentifierArtifact.create(DeterministicReferenceParser.parse(observation.g_refs))
+        
+        interp = ReferencePairInterpreter.interpret(p_art, g_art)
+        return (interp,)
+
+    def contribute(self, interpretation: tuple[ReferencePairInterpretation, ...]) -> EvidenceContributionV2[tuple[ReferencePairInterpretation, ...]]:
+        from recongraph.domain.reference.projection import ReferenceV1ProjectionContract
+        
+        projection = ReferenceV1ProjectionContract.project(interpretation)
             
         return EvidenceContributionV2(
             provider_name=SignalName.REFERENCE,
-            score=interpretation.score,
-            metadata={"reference_interpretation": interpretation},
+            score=projection.score,
+            violations=projection.violations,
+            metadata={"reference_projection": projection},
             interpretation=interpretation
         )
 

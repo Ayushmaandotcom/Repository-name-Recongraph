@@ -29,21 +29,22 @@ def test_auto_match_skip():
     assert packet is None
 
 def test_checklist_generation_ambiguous():
+    from recongraph.graph.fusion_explainability import ExplanationArtifact
     decision = ReconciliationDecision(
         action=DecisionAction.REVIEW_AMBIGUOUS,
         selected_hypothesis=None,
         competitors=(),
         rationale="Close scores"
     )
-    explanation = DecisionExplanation(
-        action=DecisionAction.REVIEW_AMBIGUOUS,
-        policy_rationale="Close scores",
-        positive_reasons=(),
-        limiting_factors=(),
-        ambiguity_context="Spread was 0.01",
-        evidence_summary=None
-    )
     
+    explanation = ExplanationArtifact(
+        trace_id="test",
+        executive_summary={"decision": DecisionAction.REVIEW_AMBIGUOUS.value},
+        domain_summaries={},
+        technical_details={},
+        audit_nodes={}
+    )
+
     builder = ReviewPacketBuilder()
     packet = builder.build(decision, explanation, CandidateGraphBuilder().build())
     
@@ -51,21 +52,22 @@ def test_checklist_generation_ambiguous():
     assert "Disambiguate competing hypotheses manually" in packet.checklist
 
 def test_checklist_generation_limits():
+    from recongraph.graph.fusion_explainability import ExplanationArtifact
     decision = ReconciliationDecision(
         action=DecisionAction.REVIEW_WEAK,
         selected_hypothesis=None,
         competitors=(),
         rationale="Weak score"
     )
-    explanation = DecisionExplanation(
-        action=DecisionAction.REVIEW_WEAK,
-        policy_rationale="Weak score",
-        positive_reasons=(),
-        limiting_factors=("Semantic violation: tax_identity_conflict", "Amounts differ significantly."),
-        ambiguity_context=None,
-        evidence_summary=None
-    )
     
+    explanation = ExplanationArtifact(
+        trace_id="test",
+        executive_summary={"decision": DecisionAction.REVIEW_WEAK.value},
+        domain_summaries={},
+        technical_details={"contradicted": ["TAX_NODE", "FINANCIAL_NODE"]},
+        audit_nodes={}
+    )
+
     builder = ReviewPacketBuilder()
     packet = builder.build(decision, explanation, CandidateGraphBuilder().build())
     
@@ -101,17 +103,9 @@ def test_packet_materialization():
         competitors=(),
         rationale="Sub threshold"
     )
-    explanation = DecisionExplanation(
-        action=DecisionAction.REVIEW_WEAK,
-        policy_rationale="Sub threshold",
-        positive_reasons=(),
-        limiting_factors=(),
-        ambiguity_context=None,
-        evidence_summary=None
-    )
     
     builder = ReviewPacketBuilder()
-    packet = builder.build(decision, explanation, graph)
+    packet = builder.build(decision, None, graph)
     
     assert packet.packet_id == "RP-00001"
     assert len(packet.purchases) == 1

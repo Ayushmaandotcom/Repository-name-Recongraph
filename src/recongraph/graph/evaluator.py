@@ -1,7 +1,6 @@
 from typing import Iterable
 from recongraph.graph.candidate import CandidateGraph
 from recongraph.graph.hypotheses import Hypothesis, EvaluatedHypothesis, EligibilityStatus
-from recongraph.matching.signals import tax_identity_score
 from recongraph.matching.scoring import SignalName, calculate_relationship_score
 from recongraph.matching.purchase_gst_semantics import (
     analyze_purchase_gst_semantics, 
@@ -57,9 +56,11 @@ class HypothesisEvaluator:
         signals = {}
         violations: set[str] = set()
         supporting_metadata = {}
+        contributions = {}
         
         for provider in self.evidence_providers:
             contrib = provider.evaluate(purchases, gsts)
+            contributions[contrib.provider_name] = contrib
             signals[contrib.provider_name] = contrib.score
             violations.update(contrib.violations)
             if contrib.metadata:
@@ -87,7 +88,8 @@ class HypothesisEvaluator:
         supporting_evidence = {
             "signals": signals,
             "relationship": relationship,
-            "metadata": supporting_metadata
+            "metadata": supporting_metadata,
+            "contributions": contributions
         }
 
         return EvaluatedHypothesis(

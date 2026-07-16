@@ -1,28 +1,77 @@
-# ReconGraph Architecture
+# ReconGraph V2 Architecture
 
-## System Overview
-ReconGraph is a semantic decision engine for evaluating hypothesis propositions over Purchase and GST records. It models evidence as immutable facts that are combined, scored, and evaluated.
+## Status
+**FROZEN (Stage 8C-T6)** - The Execution Architecture and Domain Pipelines are finalized. No further changes to execution contracts are permitted without explicit architectural re-evaluation.
 
-## Identity Model (K6)
-- **Observations**: Immutable reflections of source fields.
-- **Derivations**: Algorithms applied to observations (e.g. normalization).
-- **Assertions**: Strongly-typed semantic claims with polarity and magnitude (e.g., `identity.same_legal_entity`).
-All objects have a strictly deterministic, canonicalized `sha256` identity.
+## 1. The Execution Lifecycle
 
-## Pipeline Lifecycle (V2 Protocol)
-All evidence domains (`Financial`, `Vendor`, `Tax`, `Reference`, `Temporal`) strictly follow the EvidencePipeline protocol:
-1. `extract()` -> Observation
-2. `interpret()` -> Interpretation
-3. `contribute()` -> EvidenceAssertion
+ReconGraph strictly enforces a 4-phase execution lifecycle. Every domain of evidence (Vendor, Tax, Financial, Reference, Temporal) MUST implement these four phases in strict isolation.
 
-## Evidence Model & Decision Engine
-Evidence Assertions are aggregated by `DecisionEngine` and processed into a mathematical score.
+### Phase 1: Deterministic Extraction
+- **Role:** Safely transition raw strings into strongly typed `Observation` artifacts.
+- **Contract:** Parsers (`VendorParser`, `TaxIdentifierParser`, etc.) are the **exclusive** authorities on string manipulation.
+- **Output:** Immutable `Observation` or `Artifact`.
 
-## ADR Index
-- `ADR-001`: Vendor Identity Factorization
-- `ADR-002`: Amount Interpretation vs Projection
-- `ADR-003`: Decision Trace Semantic Identity
-- `ADR-004`: Evidence Pipeline V2 Contract
-- `ADR-005`: Evidence Semantic Kernel V2
-- `ADR-006`: Tax Scalar Projection Boundary
-- `ADR-007`: Interpreter Parsing Authority
+### Phase 2: Structural Interpretation
+- **Role:** Describe the epistemological relationship between two sets of observations.
+- **Contract:** Interpreters (`TaxPairInterpreter`, `VendorPairInterpreter`) NEVER evaluate legal or business validity. They simply describe the structural geometry of the data (e.g. `EXACT_MATCH`, `DISTINCT`, `ONE_MISSING`).
+- **Output:** Domain-specific `Interpretation` (e.g. `GSTINRelationState`).
+
+### Phase 3: Semantic Projection
+- **Role:** Translate the structural interpretation into a mathematical `EvidenceContribution` based on a configurable `Policy`.
+- **Contract:** Projectors inject scalar scores, penalties, and explicit string-based `violation` tags into the domain pipeline.
+- **Output:** `EvidenceContributionV2`.
+
+### Phase 4: Aggregation and Evaluation
+- **Role:** Aggregate evidence across all domains into a final verdict.
+- **Contract:** 
+  1. The `EvidenceProvider` blindly orchestrates Phases 1-3.
+  2. The `ReconGraphEngine` loops over all `EvidenceProviders` without order dependency.
+  3. The `HypothesisEvaluator` consumes the aggregated evidence and calculates final `SemanticFindings` and `EligibilityStatus`.
+
+## 2. Dependency Graph (Strict Bipartite Model)
+
+The graph building phase uses `CandidateGraphBuilder` to enforce bipartite topology.
+
+```mermaid
+graph TD
+    PR[Purchase Record URN] --> |CandidateEdge| GR[GST Record URN]
+    
+    subgraph Execution Pipeline
+    PR --> VP[Vendor Provider]
+    GR --> VP
+    PR --> TP[Tax Provider]
+    GR --> TP
+    PR --> RP[Reference Provider]
+    GR --> RP
+    PR --> FP[Financial Provider]
+    GR --> FP
+    PR --> TMP[Temporal Provider]
+    GR --> TMP
+    
+    VP --> HE[Hypothesis Evaluator]
+    TP --> HE
+    RP --> HE
+    FP --> HE
+    TMP --> HE
+    
+    HE --> DE[Decision Engine]
+    DE --> DT[Decision Trace]
+    DT --> EB[Explanation Builder]
+    end
+```
+
+## 3. Order Independence Contract
+The execution order of `EvidenceProviders` is mathematically proven to have **no effect** on the final `DecisionTrace`. The Trace's SHA-256 identity will always match identically regardless of provider sequence.
+
+## 4. Evidence Fusion Architecture (Stage 8I)
+ReconGraph V2 employs a topological Constraint Satisfaction Graph to aggregate evidence, preventing double-counting and handling contradictions deterministically.
+For deep-dives into the mathematical foundations, see:
+- [Evidence Fusion Ontology](./evidence-fusion.md)
+- [Evidence Dependency Model](./evidence-dependency-model.md)
+- [Contradiction Algebra](./contradiction-algebra.md)
+- [Missingness Algebra](./missingness-model.md)
+- [Fusion Design Report](./fusion-design-report.md)
+
+## 5. Source of Truth
+See the [ADR Index](./adr/index.md) for detailed architectural decisions governing this pipeline.

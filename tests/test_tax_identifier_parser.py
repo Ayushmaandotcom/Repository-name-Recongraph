@@ -1,7 +1,7 @@
 import pytest
 from recongraph.domain.tax.parser import DeterministicTaxParser, ParsedTaxIdentifierArtifact, GSTIN_PATTERN, PAN_PATTERN
 from recongraph.domain.tax.observation import TaxIdentifierObservation, TaxObservationState, TaxIdentifierCandidateType
-from recongraph.matching.signals import tax_identity_score
+
 
 
 # === GSTIN STRUCTURAL CONFORMANCE ===
@@ -222,36 +222,3 @@ def test_pan_020_malformed_string():
 # === LEGACY BOUNDARY CHARACTERIZATION ===
 # These test KNOWN DEFECTS that must remain until T3.
 # They are NOT correct behavior. They are architectural canaries.
-# If any of these tests fail, T3 semantic leakage has occurred.
-
-def test_legacy_001_malformed_malformed():
-    """KNOWN LEGACY DEFECT: MALFORMED vs MALFORMED scores 1.0.
-    This is incorrect but intentionally preserved until T3.
-    If this test fails, T3 semantic leakage has occurred."""
-    left = DeterministicTaxParser.parse("MALFORMED")
-    right = DeterministicTaxParser.parse("MALFORMED")
-    score = tax_identity_score(left, right)
-    assert score == 1.0
-
-def test_legacy_002_unknown_unknown():
-    """KNOWN LEGACY DEFECT: UNKNOWN vs UNKNOWN scores 1.0."""
-    left = DeterministicTaxParser.parse("UNKNOWN")
-    right = DeterministicTaxParser.parse("UNKNOWN")
-    score = tax_identity_score(left, right)
-    assert score == 1.0
-
-def test_legacy_003_na_na():
-    """KNOWN LEGACY DEFECT: N/A vs N/A scores 1.0."""
-    left = DeterministicTaxParser.parse("N/A")
-    right = DeterministicTaxParser.parse("N/A")
-    score = tax_identity_score(left, right)
-    assert score == 1.0
-
-def test_legacy_004_interstate_same_pan():
-    """KNOWN LEGACY DEFECT: Different GSTIN with same embedded PAN scores 0.0.
-    This is incorrect but intentionally preserved until T3."""
-    left = DeterministicTaxParser.parse("07ABCDE1234F1Z5")
-    right = DeterministicTaxParser.parse("29ABCDE1234F1Z2")
-    assert left.pan_candidate == right.pan_candidate == "ABCDE1234F"
-    score = tax_identity_score(left, right)
-    assert score == 0.0

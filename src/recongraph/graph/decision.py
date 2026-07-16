@@ -96,3 +96,28 @@ class DecisionEngine:
                 competitors=competitors,
                 rationale=f"Dominant hypothesis score ({top_hypothesis.score:.3f}) fell below the auto-match threshold ({self.policy.auto_match_threshold})."
             )
+
+from recongraph.graph.fusion_result import FusionResult
+
+class FusionDecisionEngine:
+    """
+    Translates a descriptive FusionResult into an actionable DecisionAction.
+    Used in SHADOW and FUSION modes.
+    """
+    def decide(self, fusion_result: FusionResult, fallback_hypothesis: EvaluatedHypothesis | None = None) -> ReconciliationDecision:
+        if fusion_result.contradictions:
+            # If there are explicit contradictions, it's ambiguous
+            action = DecisionAction.REVIEW_AMBIGUOUS
+        elif not fusion_result.independent_support and not fusion_result.derived_support:
+            action = DecisionAction.NO_MATCH
+        elif len(fusion_result.independent_support) >= 2:
+            action = DecisionAction.AUTO_MATCH
+        else:
+            action = DecisionAction.REVIEW_WEAK
+            
+        return ReconciliationDecision(
+            action=action,
+            selected_hypothesis=fallback_hypothesis,
+            competitors=(),
+            rationale="Decision derived via Semantic Fusion Engine"
+        )

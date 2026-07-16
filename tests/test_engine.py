@@ -42,9 +42,9 @@ def test_engine_reconcile():
     
     assert trace.engine_version == "1.0.0"
     assert trace.config_hash is not None
-    assert len(trace.events) == 1
+    assert len(trace.events) == 4
     
     # Assert serializability
     trace_dict = trace.to_dict()
     assert trace_dict["engine_version"] == "1.0.0"
-    assert len(trace_dict["events"]) == 1
+    assert len(trace_dict["events"]) == 4
