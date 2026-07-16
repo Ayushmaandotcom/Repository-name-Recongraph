@@ -12,6 +12,7 @@ class SignalName:
     AMOUNT = "amount"
     TEMPORAL = "temporal"
     TAX_IDENTITY = "tax_identity"
+    SEMANTICS = "semantics"
 
 
 @dataclass(frozen=True)

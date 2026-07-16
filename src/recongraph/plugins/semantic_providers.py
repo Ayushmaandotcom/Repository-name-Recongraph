@@ -88,12 +88,16 @@ class SemanticEvidencePipeline(EvidencePipeline[tuple[SemanticObservation, Seman
             ))
 
         return EvidenceContributionV2(
-            provider_name="SEMANTICS",
+            provider_name=SignalName.SEMANTICS,
             score=score,
             violations=frozenset({"SEMANTIC_PURPOSE_CONTRADICTION"}) if interpretation.contradicts_business_purpose else frozenset(),
             metadata={"assertions": tuple(assertions)},
             interpretation=interpretation
         )
+
+from recongraph.plugins.provider import EvidenceContribution
+
+from recongraph.matching.scoring import SignalName
 
 class SemanticEvidenceProvider:
     """
@@ -103,10 +107,21 @@ class SemanticEvidenceProvider:
         self.pipeline = SemanticEvidencePipeline()
         
     def get_name(self) -> str:
-        return "SEMANTICS"
+        return SignalName.SEMANTICS
         
     def get_blockers(self) -> Iterable[Blocker]:
         return []
         
     def get_pipeline(self) -> EvidencePipeline[Any, Any]:
         return self.pipeline
+        
+    def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
+        observation = self.pipeline.extract(purchases, gsts)
+        interpretation = self.pipeline.interpret(observation)
+        contrib_v2 = self.pipeline.contribute(interpretation)
+        return EvidenceContribution(
+            provider_name=contrib_v2.provider_name,
+            score=contrib_v2.score,
+            violations=contrib_v2.violations,
+            metadata=contrib_v2.metadata
+        )

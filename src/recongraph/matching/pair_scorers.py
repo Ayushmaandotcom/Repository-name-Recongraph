@@ -17,6 +17,7 @@ from recongraph.plugins.core_providers import (
     TemporalEvidenceProvider,
     ReferenceEvidenceProvider,
 )
+from recongraph.plugins.semantic_providers import SemanticEvidenceProvider
 from recongraph.plugins.provider_v2 import EvidenceContributionV2
 
 PURCHASE_TO_GST_MAX_DAYS = 7
@@ -28,6 +29,18 @@ PURCHASE_TO_GST_POLICY = RelationshipPolicy(
         SignalName.AMOUNT: 0.25,
         SignalName.TEMPORAL: 0.10,
         SignalName.TAX_IDENTITY: 0.25,
+    },
+    contradiction_penalties={},
+)
+
+PURCHASE_TO_GST_POLICY_WITH_SEMANTICS = RelationshipPolicy(
+    weights={
+        SignalName.ENTITY: 0.20,
+        SignalName.REFERENCE: 0.15,
+        SignalName.AMOUNT: 0.25,
+        SignalName.TEMPORAL: 0.10,
+        SignalName.TAX_IDENTITY: 0.20,
+        SignalName.SEMANTICS: 0.10,
     },
     contradiction_penalties={},
 )

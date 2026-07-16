@@ -77,3 +77,56 @@ def test_semantic_cross_model_drift_protection():
     
     with pytest.raises(ValueError, match="Cross-model semantic interpretation is invalid"):
         SemanticPairInterpreter.interpret(obs1, obs2)
+
+def test_semantic_provider_engine_integration():
+    from recongraph.config import ReconGraphConfig, DecisionConfig, DecisionMode
+    from recongraph.engine import ReconGraphEngine
+    from recongraph.plugins.core_providers import FinancialEvidenceProvider, TemporalEvidenceProvider, ReferenceEvidenceProvider, VendorEvidenceProvider, TaxEvidenceProvider
+    from recongraph.matching.reference_evidence import ReferenceCorpusProfile, ReferenceEvidenceContext, ReferenceEvidencePolicy
+    from recongraph.domain.vendor.context import VendorIdentityContext, VendorCorpusProfile
+    from recongraph.matching.pair_scorers import PURCHASE_TO_GST_POLICY_WITH_SEMANTICS
+    
+    config = ReconGraphConfig(decision_config=DecisionConfig(
+        decision_mode=DecisionMode.FUSION,
+        relationship_policy=PURCHASE_TO_GST_POLICY_WITH_SEMANTICS
+    ))
+    
+    context = ReferenceEvidenceContext(
+        profile=ReferenceCorpusProfile(reference_count=1, normalized_reference_frequency={"inv1": 1}, numeric_token_document_frequency={"1": 1}),
+        policy=ReferenceEvidencePolicy()
+    )
+    vendor_context = VendorIdentityContext(
+        corpus_profile=VendorCorpusProfile(corpus_size=1, token_document_frequencies={}, digest="1"),
+        interpreter_policy_version="1.0.0",
+        fuzzy_minimum_length=6,
+        fuzzy_threshold=0.85,
+        distinctiveness_threshold=0.01
+    )
+    
+    providers = [
+        FinancialEvidenceProvider(), 
+        TemporalEvidenceProvider(), 
+        TaxEvidenceProvider(),
+        VendorEvidenceProvider(vendor_context),
+        ReferenceEvidenceProvider(context),
+        SemanticEvidenceProvider()
+    ]
+    
+    p = PurchaseRecord(
+        record_id="p1", vendor_name="A", reference="1", amount=Decimal("100"), 
+        record_date=date(2023,1,1), tax_identity="T", description="OFFICE SUPPLIES"
+    )
+    g = GSTRecord(
+        record_id="g1", vendor_name="A", reference="1", amount=Decimal("100"), 
+        record_date=date(2023,1,1), tax_identity="T", description="STATIONERY"
+    )
+    
+    engine = ReconGraphEngine(config, providers)
+    result = engine.reconcile([p], [g])
+    
+    assert len(result.auto_matches) == 1
+    decision = result.auto_matches[0]
+    
+    # Verify semantic evidence was integrated into the decision
+    assert "semantics" in decision.selected_hypothesis.supporting_evidence["contributions"]
+
