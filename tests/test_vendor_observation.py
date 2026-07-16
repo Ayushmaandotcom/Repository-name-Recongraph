@@ -60,6 +60,28 @@ def test_misleading_substrings_do_not_falsely_extract():
     assert obs2.canonical_core_text == "LTD EDITION"
 
 
+def test_geographic_and_division_extraction():
+    # Test Geographic Extraction
+    obs = DeterministicVendorParser.parse("GOOGLE INDIA PVT LTD")
+    assert obs.legal_form_category == LegalFormCategory.PRIVATE_LIMITED
+    assert obs.canonical_core_text == "GOOGLE"
+    events = {ev.transformation_type for ev in obs.normalization_events}
+    assert TransformationType.GEOGRAPHIC_EXTRACTION in events
+    
+    # Test Division Extraction
+    obs2 = DeterministicVendorParser.parse("ACME TECHNOLOGIES PVT LTD")
+    assert obs2.canonical_core_text == "ACME"
+    events2 = {ev.transformation_type for ev in obs2.normalization_events}
+    assert TransformationType.DIVISION_EXTRACTION in events2
+    
+    # Test Both
+    obs3 = DeterministicVendorParser.parse("ACME TECHNOLOGIES INDIA")
+    assert obs3.canonical_core_text == "ACME"
+    events3 = {ev.transformation_type for ev in obs3.normalization_events}
+    assert TransformationType.GEOGRAPHIC_EXTRACTION in events3
+    assert TransformationType.DIVISION_EXTRACTION in events3
+
+
 def test_gstin_and_pan_detection():
     # Valid GSTIN
     gstin = "07ABCDE1234F1Z5"

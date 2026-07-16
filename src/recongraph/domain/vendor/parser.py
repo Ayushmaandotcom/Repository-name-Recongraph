@@ -128,6 +128,42 @@ class DeterministicVendorParser:
                 ))
                 break
                 
+        # 3b. Geographic Extraction
+        GEOGRAPHIC_TOKENS = {"INDIA", "UK", "USA", "APAC", "EMEA", "GLOBAL", "AMERICAS", "EUROPE", "ASIA"}
+        for geo in GEOGRAPHIC_TOKENS:
+            escaped = re.escape(geo)
+            pattern = re.compile(rf"(?:^|(?<=\W)){escaped}[^\w]*$", re.IGNORECASE)
+            match = pattern.search(current)
+            if match:
+                before_val = current
+                current = current[:match.start()].strip()
+                events.append(VendorNormalizationEvent(
+                    transformation_type=TransformationType.GEOGRAPHIC_EXTRACTION,
+                    affected_span=TokenSpan(match.start(), match.end(), "GEOGRAPHIC"),
+                    before_value=before_val,
+                    after_value=current,
+                    rule_name=f"EXTRACT_GEO_{geo}"
+                ))
+                break # Extract only one suffix geo for now
+                
+        # 3c. Division Extraction
+        DIVISION_TOKENS = {"TECHNOLOGIES", "SERVICES", "SOLUTIONS", "ENTERPRISES", "SYSTEMS", "CORP", "CORPORATION", "INC", "LLC"}
+        for div in DIVISION_TOKENS:
+            escaped = re.escape(div)
+            pattern = re.compile(rf"(?:^|(?<=\W)){escaped}[^\w]*$", re.IGNORECASE)
+            match = pattern.search(current)
+            if match:
+                before_val = current
+                current = current[:match.start()].strip()
+                events.append(VendorNormalizationEvent(
+                    transformation_type=TransformationType.DIVISION_EXTRACTION,
+                    affected_span=TokenSpan(match.start(), match.end(), "DIVISION"),
+                    before_value=before_val,
+                    after_value=current,
+                    rule_name=f"EXTRACT_DIV_{div}"
+                ))
+                break # Extract only one division suffix for now
+                
         # 4. Punctuation stripping
         # Replace non-alphanumeric with space
         no_punct = re.sub(r"[^\w\s]", " ", current)

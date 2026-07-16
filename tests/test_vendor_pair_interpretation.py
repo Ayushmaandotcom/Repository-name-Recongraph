@@ -98,12 +98,12 @@ def test_corpus_distinctiveness(default_context):
     interp = VendorPairInterpreter.interpret(left, left_id, right, right_id, default_context)
     assert interp.corpus_distinctiveness.state == CorpusDistinctivenessState.DISTINCTIVE_SUPPORT
     
-    # ENTERPRISES has DF 500/1000 = 0.5 > 0.01 threshold -> ATTENUATED
-    left2, left2_id = parse_and_wrap("XYZ ENTERPRISES")
-    right2, right2_id = parse_and_wrap("ABC ENTERPRISES")
-    
+    # TRADERS has DF 300/1000 = 0.3 > 0.01 threshold -> ATTENUATED
+    left2, left2_id = parse_and_wrap("XYZ TRADERS")
+    right2, right2_id = parse_and_wrap("ABC TRADERS")
+
     interp2 = VendorPairInterpreter.interpret(left2, left2_id, right2, right2_id, default_context)
-    # They share "ENTERPRISES"
+    # They share "TRADERS"
     assert interp2.corpus_distinctiveness.state == CorpusDistinctivenessState.ATTENUATED_SUPPORT
     assert interp2.lexical_relation.state == LexicalRelationState.DIFFERENT
 

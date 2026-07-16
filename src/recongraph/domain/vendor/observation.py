@@ -17,6 +17,8 @@ class TransformationType(Enum):
     WHITESPACE_COLLAPSE = auto()
     PUNCTUATION_STRIP = auto()
     LEGAL_FORM_EXTRACTION = auto()
+    GEOGRAPHIC_EXTRACTION = auto()
+    DIVISION_EXTRACTION = auto()
 
 class LegalFormCategory(Enum):
     PRIVATE_LIMITED = auto()

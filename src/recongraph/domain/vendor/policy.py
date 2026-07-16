@@ -2,7 +2,8 @@ from typing import List
 
 from recongraph.domain.vendor.factors import (
     GSTRegistrationRelationState, PANRelationState, PANEvidenceDependence,
-    LexicalRelationState, LegalFormRelationState, CorpusDistinctivenessState
+    LexicalRelationState, LegalFormRelationState, CorpusDistinctivenessState,
+    OrganizationalRelationState
 )
 from recongraph.domain.vendor.interpretation import VendorIdentityInterpretation
 from recongraph.domain.vendor.projection import VendorEvidenceProjection
@@ -51,6 +52,17 @@ class VendorProjectionPolicyV1:
         elif lex.state == LexicalRelationState.DIFFERENT:
             considered_factors.append("lexical_relation")
             base_similarity = lex.similarity_score if lex.similarity_score is not None else 0.0
+            
+        # 1.5 Evaluate Organizational Knowledge Base (Overrides Lexical)
+        org = interpretation.organizational_relation
+        if org.state in (OrganizationalRelationState.KNOWN_ALIAS, OrganizationalRelationState.PARENT_SUBSIDIARY, OrganizationalRelationState.HISTORICAL_RENAME):
+            considered_factors.append("organizational_relation")
+            base_similarity = 1.0
+            contradiction_markers = [m for m in contradiction_markers if m != "LEGAL_FORM_LEXICAL_DIFFERENCE"] # Clear lexical-based warnings
+        elif org.state == OrganizationalRelationState.UNAFFILIATED:
+            considered_factors.append("organizational_relation")
+            base_similarity = 0.0
+            contradiction_markers.append("KNOWN_UNAFFILIATED_ENTITIES")
             
         # 2. Evaluate Distinctiveness (Attenuator)
         dist = interpretation.corpus_distinctiveness

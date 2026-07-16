@@ -54,6 +54,13 @@ class CorpusDistinctivenessState(Enum):
     ATTENUATED_SUPPORT = auto()
     NOT_APPLICABLE = auto()
 
+class OrganizationalRelationState(Enum):
+    KNOWN_ALIAS = auto()
+    PARENT_SUBSIDIARY = auto()
+    HISTORICAL_RENAME = auto()
+    UNAFFILIATED = auto()
+    NO_KNOWLEDGE = auto()
+
 
 @dataclass(frozen=True)
 class GSTRegistrationRelation:
@@ -89,3 +96,7 @@ class CorpusDistinctiveness:
     state: CorpusDistinctivenessState
     most_distinctive_token: Optional[str]
     document_frequency: Optional[float]
+
+@dataclass(frozen=True)
+class OrganizationalRelation:
+    state: OrganizationalRelationState

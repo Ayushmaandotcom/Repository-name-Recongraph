@@ -9,7 +9,8 @@ from recongraph.domain.vendor.factors import (
     PANRelation, PANRelationState, PANEvidenceDependence,
     LexicalRelation, LexicalRelationState,
     LegalFormRelation, LegalFormRelationState,
-    CorpusDistinctiveness, CorpusDistinctivenessState
+    CorpusDistinctiveness, CorpusDistinctivenessState,
+    OrganizationalRelation, OrganizationalRelationState
 )
 from recongraph.domain.derivations import DerivedArtifactIdentity
 
@@ -24,6 +25,7 @@ class VendorIdentityInterpretation:
     lexical_relation: LexicalRelation
     legal_form_relation: LegalFormRelation
     corpus_distinctiveness: CorpusDistinctiveness
+    organizational_relation: OrganizationalRelation
     
     warnings: Tuple[str, ...]
 
@@ -61,6 +63,9 @@ class VendorPairInterpreter:
         # 5. Corpus Distinctiveness
         corpus_rel = cls._evaluate_distinctiveness(shared_tokens, context)
         
+        # 6. Organizational Knowledge Base
+        org_rel = cls._evaluate_organizational_knowledge(left, right, context)
+        
         warnings: list[str] = []
         # If fuzzy was skipped due to length, we might emit a warning, but for now we keep it simple.
 
@@ -73,6 +78,7 @@ class VendorPairInterpreter:
             lexical_relation=lexical_rel,
             legal_form_relation=legal_rel,
             corpus_distinctiveness=corpus_rel,
+            organizational_relation=org_rel,
             warnings=tuple(warnings)
         )
 
@@ -223,3 +229,24 @@ class VendorPairInterpreter:
         if min_df <= context.distinctiveness_threshold:
             return CorpusDistinctiveness(CorpusDistinctivenessState.DISTINCTIVE_SUPPORT, best_token, min_df)
         return CorpusDistinctiveness(CorpusDistinctivenessState.ATTENUATED_SUPPORT, best_token, min_df)
+
+    @classmethod
+    def _evaluate_organizational_knowledge(
+        cls, left: VendorNameObservation, right: VendorNameObservation, context: VendorIdentityContext
+    ) -> OrganizationalRelation:
+        if left.observation_state != VendorObservationState.PRESENT or right.observation_state != VendorObservationState.PRESENT:
+            return OrganizationalRelation(OrganizationalRelationState.NO_KNOWLEDGE)
+            
+        from recongraph.domain.vendor.knowledge import AliasRelation
+        alias_rel = context.knowledge_base.get_relation(left.canonical_core_text, right.canonical_core_text)
+        
+        if alias_rel == AliasRelation.KNOWN_ALIAS:
+            return OrganizationalRelation(OrganizationalRelationState.KNOWN_ALIAS)
+        elif alias_rel == AliasRelation.HISTORICAL_RENAME:
+            return OrganizationalRelation(OrganizationalRelationState.HISTORICAL_RENAME)
+        elif alias_rel == AliasRelation.PARENT_SUBSIDIARY:
+            return OrganizationalRelation(OrganizationalRelationState.PARENT_SUBSIDIARY)
+        elif alias_rel == AliasRelation.UNAFFILIATED:
+            return OrganizationalRelation(OrganizationalRelationState.UNAFFILIATED)
+        
+        return OrganizationalRelation(OrganizationalRelationState.NO_KNOWLEDGE)

@@ -92,16 +92,17 @@ def test_pan_conflict_capping_072_problem(default_context):
     assert proj.similarity == 0.40
 
 def test_identical_exact_common_token_attenuation(default_context):
-    left, left_id = parse_and_wrap("XYZ ENTERPRISES")
-    right, right_id = parse_and_wrap("ABC ENTERPRISES")
+    left, left_id = parse_and_wrap("XYZ TRADERS")
+    right, right_id = parse_and_wrap("ABC TRADERS")
     
     interp = VendorPairInterpreter.interpret(left, left_id, right, right_id, default_context)
     proj = VendorProjectionPolicyV1.project(interp)
     
     assert "corpus_distinctiveness" in proj.considered_factors
     
-    left2, left2_id = parse_and_wrap("ENTERPRISES")
-    right2, right2_id = parse_and_wrap("ENTERPRISES")
+    # If the only token is TRADERS, exact equality should not be capped by attenuation
+    left2, left2_id = parse_and_wrap("TRADERS")
+    right2, right2_id = parse_and_wrap("TRADERS")
     interp2 = VendorPairInterpreter.interpret(left2, left2_id, right2, right2_id, default_context)
     proj2 = VendorProjectionPolicyV1.project(interp2)
     
