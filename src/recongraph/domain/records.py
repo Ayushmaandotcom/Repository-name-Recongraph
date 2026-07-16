@@ -14,6 +14,7 @@ class PurchaseRecord:
     amount: Decimal
     record_date: date
     tax_identity: str | None
+    description: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None
@@ -36,6 +37,7 @@ class GSTRecord:
     amount: Decimal
     record_date: date
     tax_identity: str | None
+    description: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None
@@ -58,6 +60,7 @@ class InvoiceRecord:
     amount: Decimal
     record_date: date
     tax_identity: str | None
+    description: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None
@@ -79,6 +82,7 @@ class BankRecord:
     reference: str | None
     amount: Decimal
     record_date: date
+    description: str | None = None
     currency: str = "USD"
     sign: int = -1
     def __post_init__(self):
