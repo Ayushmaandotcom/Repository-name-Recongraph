@@ -7,6 +7,7 @@ class DecisionAction(StrEnum):
     AUTO_MATCH = "auto_match"
     REVIEW_AMBIGUOUS = "review_ambiguous"
     REVIEW_WEAK = "review_weak"
+    REVIEW_INSUFFICIENT_EVIDENCE = "review_insufficient_evidence"
     NO_MATCH = "no_match"
 
 @dataclass(frozen=True)

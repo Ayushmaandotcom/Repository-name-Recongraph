@@ -93,3 +93,32 @@ class ReviewPacketBuilder:
             competitors=curated_competitors,
             checklist=checklist
         )
+
+    def build_leftover(self, unmatched_nodes: frozenset[str], graph: CandidateGraph) -> ReviewPacket | None:
+        if not unmatched_nodes:
+            return None
+            
+        self._counter += 1
+        packet_id = f"RP-{self._counter:05d}"
+        
+        purchases = []
+        gsts = []
+        
+        for urn in unmatched_nodes:
+            if urn.startswith("urn:recongraph:purchase:"):
+                purchases.append(graph.nodes[urn])
+            elif urn.startswith("urn:recongraph:gst:"):
+                gsts.append(graph.nodes[urn])
+                
+        if not purchases and not gsts:
+            return None
+            
+        return ReviewPacket(
+            packet_id=packet_id,
+            action=DecisionAction.REVIEW_INSUFFICIENT_EVIDENCE,
+            purchases=tuple(purchases),
+            gsts=tuple(gsts),
+            explanation=None,
+            competitors=(),
+            checklist=("Review unmatched records left over from an auto-match component",)
+        )

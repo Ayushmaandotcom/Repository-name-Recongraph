@@ -92,7 +92,7 @@ class ReconGraphEngine:
                             contributions = h.supporting_evidence.get("contributions", {})
                             for provider_name, contrib in contributions.items():
                                 # We must convert EvidenceContribution to EvidenceContributionV2
-                                contrib_v2 = EvidenceContributionV2(
+                                contrib_v2: EvidenceContributionV2[Any] = EvidenceContributionV2(
                                     provider_name=contrib.provider_name,
                                     score=contrib.score,
                                     violations=contrib.violations,
@@ -172,6 +172,13 @@ class ReconGraphEngine:
                 # Action Mapping
                 if decision.action == DecisionAction.AUTO_MATCH:
                     auto_matches.append(decision)
+                    if decision.selected_hypothesis and decision.selected_hypothesis.hypothesis.unmatched_nodes:
+                        leftover_packet = packet_builder.build_leftover(
+                            decision.selected_hypothesis.hypothesis.unmatched_nodes, 
+                            graph
+                        )
+                        if leftover_packet:
+                            review_packets.append(leftover_packet)
                 elif self.config.review_config.enabled and decision.action in (DecisionAction.REVIEW_WEAK, DecisionAction.REVIEW_AMBIGUOUS):
                     # We pass the Fusion explanation to the review packet if available, otherwise None
                     packet = packet_builder.build(decision, fusion_explanation, graph)

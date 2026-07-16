@@ -1,37 +1,29 @@
-# ReconGraph
+# Recongraph
 
-[![Tests](https://github.com/Ayushmaandotcom/Repository-name-Recongraph/actions/workflows/test.yml/badge.svg)](https://github.com/Ayushmaandotcom/Repository-name-Recongraph/actions)
+[![Tests](https://github.com/Ayushmaandotcom/Recongraph/actions/workflows/test.yml/badge.svg)](https://github.com/Ayushmaandotcom/Recongraph/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version: v1.0.0](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Ayushmaandotcom/Repository-name-Recongraph/releases)
 
 **A deterministic, graph-based evidence reasoning framework for financial reconciliation.**
 
-ReconGraph is a fundamentally different approach to financial reconciliation. Instead of relying on opaque similarity scores and rigid heuristic rules, ReconGraph frames reconciliation as a formal reasoning problem. It builds a semantic graph of evidence, strictly enforces provenance, and deterministically derives an auditable explanation for every match, mismatch, and anomaly.
+Recongraph is an approach to financial reconciliation that moves beyond opaque scalar similarity scores. Instead of relying on rigid heuristic rules, Recongraph frames reconciliation as a formal reasoning problem, building a semantic graph of evidence.
 
-## 🌟 Why ReconGraph?
+## 🌟 Why Recongraph?
 
-Traditional reconciliation systems fail at scale because they conflate *similarity* with *identity*. If a purchase ledger says "ABC Pvt Ltd" and a bank statement says "ABC LLP", a naive fuzzy-matcher might return an 85% match score. 
+Traditional reconciliation systems fail at scale because they conflate *similarity* with *identity*. Recongraph extracts the structural semantic reality of records, distinguishing between "missing evidence" and "contradicting evidence".
 
-**ReconGraph knows better.** It extracts the structural semantic reality: these are two fundamentally different legal entities (Private Limited vs. Limited Liability Partnership) despite sharing a token root. 
-
-With ReconGraph, you don't get magic black-box ML. You get **provable reasoning**.
-
-- **Epistemic Honesty:** Missing evidence is never treated as a contradiction. 
-- **Graph-Based Fusion:** It merges Vendor, Tax, Financial, and Temporal evidence streams into a unified DAG to detect corroboration and contradictions.
-- **Deterministic Explainability:** The explanation engine is a structural mirror of the reasoning engine. Every "Why?" is answered by a cryptographic link to the exact node that caused the decision. No hallucinations.
-- **Shadow Mode Native:** Deploy legacy models and the Fusion Engine side-by-side. ReconGraph produces differential reports out of the box.
+- **Epistemic Honesty:** Missing evidence is never treated as a contradiction.
+- **Decision Engine:** It evaluates Vendor, Tax, Financial, and Temporal evidence streams.
+- **Explainability:** The engine yields an `ExplanationArtifact` outlining exactly which signals corroborated or contradicted a match.
 
 ## 🏗 Architecture at a Glance
 
-ReconGraph replaces pipelines with a Multi-Evidence Fusion Graph:
-
 1. **Observations:** Raw financial records (Purchases, GST, Bank lines) are ingested.
-2. **Contributions:** Providers generate bipolar evidence (Support, Conflict, Unknown).
-3. **Graph Building:** Evidence is structured into a DAG (Directed Acyclic Graph) based on dependencies and semantic relationships.
-4. **Propagation:** State propagates through the graph, resolving conflicts and validating corroborations.
-5. **Explainability:** The engine yields an `ExplanationArtifact` covering Executive, Domain, Technical, and Audit layers.
+2. **Contributions:** Providers evaluate evidence and return structured contributions.
+3. **Graph Building:** Records sharing blocking keys are connected in a Candidate Graph.
+4. **Hypothesis Evaluation:** Connected components are partitioned into hypotheses and scored.
+5. **Decision & Routing:** Sparse or conflicting matches are routed to manual review packets.
 
-*(See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed Mermaid diagrams and system flows).*
+*(See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for system flows).*
 
 ## 🚀 Quick Start
 
@@ -42,8 +34,8 @@ ReconGraph replaces pipelines with a Multi-Evidence Fusion Graph:
 ### Installation
 
 ```bash
-git clone https://github.com/Ayushmaandotcom/Repository-name-Recongraph.git
-cd Repository-name-Recongraph
+git clone https://github.com/Ayushmaandotcom/Recongraph.git
+cd Recongraph
 
 # Install the engine and its dependencies
 pip install -e .
@@ -55,20 +47,54 @@ pip install -e .
 from datetime import date
 from decimal import Decimal
 from recongraph.engine import ReconGraphEngine
-from recongraph.config import ReconGraphConfig
+from recongraph.config import ReconGraphConfig, DecisionConfig, DecisionMode
 from recongraph.domain.records import PurchaseRecord, GSTRecord
+from recongraph.plugins.core_providers import (
+    VendorEvidenceProvider,
+    ReferenceEvidenceProvider,
+    FinancialEvidenceProvider,
+    TemporalEvidenceProvider,
+    TaxEvidenceProvider
+)
+from recongraph.domain.vendor.context import VendorIdentityContext, VendorCorpusProfile
+from recongraph.matching.reference_evidence import ReferenceEvidenceContext, ReferenceCorpusProfile, ReferenceEvidencePolicy
 
-# 1. Initialize Engine
-engine = ReconGraphEngine(config=ReconGraphConfig(shadow_mode=False))
+# 1. Setup Providers
+vendor_context = VendorIdentityContext(
+    corpus_profile=VendorCorpusProfile(corpus_size=1, token_document_frequencies={}, digest='1'),
+    interpreter_policy_version='1.0.0',
+    fuzzy_minimum_length=6,
+    fuzzy_threshold=0.85,
+    distinctiveness_threshold=0.01
+)
+reference_context = ReferenceEvidenceContext(
+    profile=ReferenceCorpusProfile(
+        reference_count=1, 
+        normalized_reference_frequency={"inv2026a": 1}, 
+        numeric_token_document_frequency={"2026": 1}
+    ),
+    policy=ReferenceEvidencePolicy()
+)
+providers = [
+    VendorEvidenceProvider(vendor_context),
+    ReferenceEvidenceProvider(reference_context),
+    FinancialEvidenceProvider(tolerance=0.05),
+    TemporalEvidenceProvider(max_days=7),
+    TaxEvidenceProvider()
+]
 
-# 2. Define Evidence
+# 2. Initialize Engine
+config = ReconGraphConfig(decision_config=DecisionConfig(decision_mode=DecisionMode.FUSION))
+engine = ReconGraphEngine(config=config, providers=providers)
+
+# 3. Define Evidence
 purchase = PurchaseRecord(
     record_id="P-001",
     vendor_name="TechCorp Private Limited",
     reference="INV-2026-A",
     amount=Decimal("15000.00"),
     record_date=date(2026, 1, 15),
-    tax_identity="07TECHC1234A1Z5"
+    tax_identity="07ABCDE1234F1Z1"
 )
 
 gst = GSTRecord(
@@ -77,21 +103,20 @@ gst = GSTRecord(
     reference="2026-A",
     amount=Decimal("15000.00"),
     record_date=date(2026, 1, 16),
-    tax_identity="07TECHC1234A1Z5"
+    tax_identity="07ABCDE1234F1Z1"
 )
 
-# 3. Evaluate Match
-packet = engine.reconcile(purchase, [gst])
+# 4. Evaluate Match
+result = engine.reconcile([purchase], [gst])
 
-print(f"Action: {packet.action.value}")
-print(f"Explanation: {packet.explanation.executive_summary['decision']}")
+if result.auto_matches:
+    print(f"Action: {result.auto_matches[0].action.value}")
+elif result.review_packets:
+    packet = result.review_packets[0]
+    print(f"Action: {packet.action.value}")
+    if packet.explanation:
+        print(f"Explanation: {packet.explanation.executive_summary['decision']}")
 ```
-
-## 📊 Benchmarks
-
-ReconGraph is built to scale while preserving strict determinism. The reasoning graph typically propagates in `< 1ms` per hypothesis. 
-
-See [BENCHMARKS.md](BENCHMARKS.md) for a complete breakdown of parser, interpretation, graph-building, and fusion performance.
 
 ## 📖 Documentation
 
@@ -105,11 +130,7 @@ Dive deeper into ReconGraph's design philosophy and internal APIs:
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on adding new Evidence Providers, submitting bug reports, and ensuring your code passes the rigorous property-based test suite.
-
-## 🗺 Roadmap
-
-ReconGraph v1.0 solidifies the deterministic reasoning engine. Future versions (v2.x) will explore ML ranking, distributed execution, and external graph persistence. See [ROADMAP.md](ROADMAP.md) for what's next.
+We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting bug reports and ensuring your code passes our test suite.
 
 ## 📄 License
 
