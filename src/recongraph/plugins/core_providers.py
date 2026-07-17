@@ -349,12 +349,87 @@ class VendorEvidencePipeline(EvidencePipeline[VendorObservationPayload, Any]):
             
         weakest_similarity, weakest_interp, weakest_proj = interpretation
         
+        from recongraph.domain.assertions import EvidenceAncestryRef, EvidenceAssertion, AssertionPolarity
+        from recongraph.domain.scopes import Proposition, ScopeKind, SubjectRef
+        from recongraph.domain.authority import AuthorityDescriptor, AuthorityBasisId
+        from recongraph.domain.identity import KernelIdentityRef, IdentityDomainId, IdentitySchemaId, IdentityDigest
+        from recongraph.domain.vendor.claims import (
+            SAME_ECONOMIC_ENTITY_CLAIM, SAME_LEGAL_ENTITY_CLAIM,
+            SHARED_TAX_REGISTRATION_CLAIM, ALIAS_MATCH_CLAIM
+        )
+        from recongraph.domain.vendor.factors import (
+            PANRelationState, GSTRegistrationRelationState, LexicalRelationState, OrganizationalRelationState
+        )
+        
+        mock_ancestry = EvidenceAncestryRef(
+            identity=KernelIdentityRef(
+                domain=IdentityDomainId("recongraph.observation_occurrence"),
+                schema=IdentitySchemaId("recongraph.observation_occurrence.v1"),
+                digest=IdentityDigest("sha256:0000000000000000000000000000000000000000000000000000000000000000")
+            )
+        )
+        
+        assertions = []
+        
+        # 1. Legal Entity Assertions (PAN)
+        pan_state = weakest_interp.pan_relation.state
+        if pan_state == PANRelationState.VALID_AND_EQUAL:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SAME_LEGAL_ENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+        elif pan_state == PANRelationState.VALID_AND_DIFFERENT:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SAME_LEGAL_ENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.CONFLICT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+            
+        # 2. Tax Registration Assertions (GSTIN)
+        gst_state = weakest_interp.gst_registration_relation.state
+        if gst_state == GSTRegistrationRelationState.VALID_AND_EQUAL:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SHARED_TAX_REGISTRATION_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+        elif gst_state == GSTRegistrationRelationState.VALID_AND_DIFFERENT:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SHARED_TAX_REGISTRATION_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.CONFLICT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+            
+        # 3. Alias Match Assertions (Lexical)
+        lex_state = weakest_interp.lexical_relation.state
+        if lex_state in (LexicalRelationState.EXACT_NORMALIZED_CORE_EQUALITY, LexicalRelationState.TOKEN_SET_EQUALITY, LexicalRelationState.BOUNDED_SUBSET):
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=ALIAS_MATCH_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+        elif lex_state == LexicalRelationState.DIFFERENT:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=ALIAS_MATCH_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.CONFLICT, magnitude=0.5, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+            
+        # 4. Economic Entity Assertions (Organizational)
+        org_state = weakest_interp.organizational_relation.state
+        if org_state in (OrganizationalRelationState.KNOWN_ALIAS, OrganizationalRelationState.PARENT_SUBSIDIARY, OrganizationalRelationState.HISTORICAL_RENAME):
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SAME_ECONOMIC_ENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+        elif org_state == OrganizationalRelationState.UNAFFILIATED:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=SAME_ECONOMIC_ENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.CONFLICT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("vendor_model")), ancestry=mock_ancestry
+            ))
+
         return EvidenceContributionV2(
             provider_name=SignalName.ENTITY,
             score=weakest_similarity,
             metadata={
                 "vendor_interpretation": weakest_interp,
-                "vendor_projection": weakest_proj
+                "vendor_projection": weakest_proj,
+                "assertions": tuple(assertions)
             },
             interpretation=interpretation
         )
