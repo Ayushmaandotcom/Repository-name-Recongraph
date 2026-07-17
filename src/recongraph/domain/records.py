@@ -21,6 +21,7 @@ class PurchaseRecord:
     tax_rate: Decimal | None = None
     currency: str = "USD"
     sign: int = 1
+    layout_artifact: 'recongraph.domain.document.layout.DocumentLayoutArtifact | None' = None
     def __post_init__(self):
         for field in ("amount", "net_amount", "tax_amount", "tax_rate"):
             val = getattr(self, field, None)
@@ -45,6 +46,7 @@ class GSTRecord:
     tax_rate: Decimal | None = None
     currency: str = "USD"
     sign: int = -1
+    layout_artifact: 'recongraph.domain.document.layout.DocumentLayoutArtifact | None' = None
     def __post_init__(self):
         for field in ("amount", "net_amount", "tax_amount", "tax_rate"):
             val = getattr(self, field, None)

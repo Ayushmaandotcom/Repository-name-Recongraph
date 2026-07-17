@@ -514,3 +514,101 @@ class ReferenceEvidenceProvider:
             violations=contrib_v2.violations,
             metadata=contrib_v2.metadata
         )
+
+# --- Document Intelligence Engine ---
+
+from recongraph.domain.document.layout import DocumentLayoutArtifact
+from recongraph.domain.document.interpretation import DocumentLayoutInterpreter
+
+@dataclass(frozen=True)
+class DocumentObservationPayload:
+    purchases: tuple[PurchaseRecord, ...]
+    gsts: tuple[GSTRecord, ...]
+
+class DocumentEvidencePipeline(EvidencePipeline[DocumentObservationPayload, Any]):
+    def extract(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> DocumentObservationPayload:
+        return DocumentObservationPayload(tuple(purchases), tuple(gsts))
+
+    def interpret(self, observation: DocumentObservationPayload) -> Any:
+        # We evaluate the purchase record's layout (as it represents the invoice)
+        # In a real system, we might evaluate both and compare structural fingerprints.
+        for p in observation.purchases:
+            if p.layout_artifact:
+                return DocumentLayoutInterpreter.interpret(p.layout_artifact)
+        return None
+
+    def contribute(self, interpretation: Any) -> EvidenceContributionV2[Any]:
+        if not interpretation:
+            return EvidenceContributionV2(
+                provider_name="DocumentIntelligence",
+                score=None,
+                metadata={},
+                interpretation=None
+            )
+            
+        from recongraph.domain.assertions import EvidenceAncestryRef, EvidenceAssertion, AssertionPolarity
+        from recongraph.domain.scopes import Proposition, ScopeKind, SubjectRef
+        from recongraph.domain.authority import AuthorityDescriptor, AuthorityBasisId
+        from recongraph.domain.identity import KernelIdentityRef, IdentityDomainId, IdentitySchemaId, IdentityDigest
+        from recongraph.domain.document.claims import (
+            HAS_VALID_SIGNATURE_REGION_CLAIM, TOTALS_BLOCK_CONSISTENCY_CLAIM, HEADER_MATCH_CLAIM
+        )
+        
+        mock_ancestry = EvidenceAncestryRef(
+            identity=KernelIdentityRef(
+                domain=IdentityDomainId("recongraph.observation_occurrence"),
+                schema=IdentitySchemaId("recongraph.observation_occurrence.v1"),
+                digest=IdentityDigest("sha256:0000000000000000000000000000000000000000000000000000000000000000")
+            )
+        )
+        
+        assertions = []
+        
+        if interpretation.has_signature:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=HAS_VALID_SIGNATURE_REGION_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("document_model")), ancestry=mock_ancestry
+            ))
+            
+        if interpretation.has_totals_block:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=TOTALS_BLOCK_CONSISTENCY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("document_model")), ancestry=mock_ancestry
+            ))
+            
+        if interpretation.has_header:
+            assertions.append(EvidenceAssertion(
+                proposition=Proposition.create(claim=HEADER_MATCH_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("document_model")), ancestry=mock_ancestry
+            ))
+            
+        return EvidenceContributionV2(
+            provider_name="DocumentIntelligence",
+            score=None,
+            metadata={
+                "document_interpretation": interpretation,
+                "assertions": tuple(assertions)
+            },
+            interpretation=interpretation
+        )
+
+class DocumentIntelligenceProvider:
+    def __init__(self):
+        self.pipeline = DocumentEvidencePipeline()
+
+    def get_name(self) -> str:
+        return "DocumentIntelligence"
+        
+    def get_blockers(self) -> Iterable[Blocker]:
+        return []
+        
+    def evaluate(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> EvidenceContribution:
+        observation = self.pipeline.extract(purchases, gsts)
+        interpretation = self.pipeline.interpret(observation)
+        contrib_v2 = self.pipeline.contribute(interpretation)
+        return EvidenceContribution(
+            provider_name=contrib_v2.provider_name,
+            score=contrib_v2.score,
+            violations=contrib_v2.violations,
+            metadata=contrib_v2.metadata
+        )
