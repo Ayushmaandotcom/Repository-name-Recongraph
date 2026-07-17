@@ -15,6 +15,7 @@ class PurchaseRecord:
     record_date: date
     tax_identity: str | None
     description: str | None = None
+    filing_period: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None
@@ -38,6 +39,7 @@ class GSTRecord:
     record_date: date
     tax_identity: str | None
     description: str | None = None
+    filing_period: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None
@@ -61,6 +63,7 @@ class InvoiceRecord:
     record_date: date
     tax_identity: str | None
     description: str | None = None
+    filing_period: str | None = None
     net_amount: Decimal | None = None
     tax_amount: Decimal | None = None
     tax_rate: Decimal | None = None

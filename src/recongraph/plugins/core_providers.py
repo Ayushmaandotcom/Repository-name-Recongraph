@@ -65,6 +65,8 @@ class FinancialEvidenceProvider:
 class TemporalObservation:
     p_dates: tuple[datetime.date, ...]
     g_dates: tuple[datetime.date, ...]
+    p_periods: tuple[str | None, ...]
+    g_periods: tuple[str | None, ...]
 
 class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, tuple[TemporalPairInterpretation, ...]]):
     def __init__(self, max_days: int):
@@ -73,7 +75,9 @@ class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, tuple[Tempo
     def extract(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> TemporalObservation:
         return TemporalObservation(
             p_dates=tuple(p.record_date for p in purchases),
-            g_dates=tuple(g.record_date for g in gsts)
+            g_dates=tuple(g.record_date for g in gsts),
+            p_periods=tuple(p.filing_period for p in purchases),
+            g_periods=tuple(g.filing_period for g in gsts)
         )
 
     def interpret(self, observation: TemporalObservation) -> tuple[TemporalPairInterpretation, ...]:
@@ -81,25 +85,81 @@ class TemporalEvidencePipeline(EvidencePipeline[TemporalObservation, tuple[Tempo
         from recongraph.domain.temporal.interpretation import TemporalPairInterpreter
         
         interps = []
-        for p_date in observation.p_dates:
-            p_art = TemporalArtifact.create(p_date)
-            for g_date in observation.g_dates:
-                g_art = TemporalArtifact.create(g_date)
+        for p_date, p_period in zip(observation.p_dates, observation.p_periods):
+            p_art = TemporalArtifact.create(p_date, p_period)
+            for g_date, g_period in zip(observation.g_dates, observation.g_periods):
+                g_art = TemporalArtifact.create(g_date, g_period)
                 interps.append(TemporalPairInterpreter.interpret(p_art, g_art, self.max_days))
                 
         return tuple(interps)
 
     def contribute(self, interpretation: tuple[TemporalPairInterpretation, ...]) -> EvidenceContributionV2[tuple[TemporalPairInterpretation, ...]]:
         from recongraph.domain.temporal.projection import TemporalV1ProjectionContract
+        from recongraph.domain.temporal.claims import SAME_FISCAL_PERIOD_CLAIM, VALID_LATE_FILING_CLAIM
+        from recongraph.domain.scopes import Proposition, ScopeKind, SubjectRef
+        from recongraph.domain.assertions import EvidenceAssertion, AssertionPolarity
+        from recongraph.domain.authority import AuthorityDescriptor, AuthorityBasisId
+        from recongraph.domain.temporal.factors import TemporalRelationState
+        # For missing ancestry, we mock it for tests for now just like in Semantic
+        from recongraph.domain.assertions import EvidenceAncestryRef
+        from recongraph.domain.identity import KernelIdentityRef, IdentityDomainId, IdentitySchemaId, IdentityDigest
+        mock_ancestry = EvidenceAncestryRef(
+            identity=KernelIdentityRef(
+                domain=IdentityDomainId("recongraph.observation_occurrence"),
+                schema=IdentitySchemaId("recongraph.observation_occurrence.v1"),
+                digest=IdentityDigest("sha256:0000000000000000000000000000000000000000000000000000000000000000")
+            )
+        )
         
         projection = TemporalV1ProjectionContract.project(interpretation)
         
+        assertions = []
+        for interp in interpretation:
+            state = interp.relation.state
+            
+            if state in (TemporalRelationState.EXACT_MATCH, TemporalRelationState.WITHIN_TOLERANCE):
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(
+                        claim=SAME_FISCAL_PERIOD_CLAIM,
+                        kind=ScopeKind.RECORD_PAIR,
+                        left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]
+                    ),
+                    polarity=AssertionPolarity.SUPPORT,
+                    magnitude=1.0,
+                    authority=AuthorityDescriptor(basis=AuthorityBasisId("temporal_model")),
+                    ancestry=mock_ancestry
+                ))
+            elif state == TemporalRelationState.LATE_FILING:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(
+                        claim=VALID_LATE_FILING_CLAIM,
+                        kind=ScopeKind.RECORD_PAIR,
+                        left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]
+                    ),
+                    polarity=AssertionPolarity.SUPPORT,
+                    magnitude=1.0,
+                    authority=AuthorityDescriptor(basis=AuthorityBasisId("temporal_model")),
+                    ancestry=mock_ancestry
+                ))
+            elif state == TemporalRelationState.EXCEEDS_WINDOW:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(
+                        claim=SAME_FISCAL_PERIOD_CLAIM,
+                        kind=ScopeKind.RECORD_PAIR,
+                        left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]
+                    ),
+                    polarity=AssertionPolarity.CONFLICT,
+                    magnitude=1.0,
+                    authority=AuthorityDescriptor(basis=AuthorityBasisId("temporal_model")),
+                    ancestry=mock_ancestry
+                ))
+
         return EvidenceContributionV2(
             provider_name=SignalName.TEMPORAL,
             score=projection.score,
             violations=projection.violations,
             interpretation=interpretation,
-            metadata={"temporal_projection": projection}
+            metadata={"temporal_projection": projection, "assertions": tuple(assertions)}
         )
 
 class TemporalEvidenceProvider:
