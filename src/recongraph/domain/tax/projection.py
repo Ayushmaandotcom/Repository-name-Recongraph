@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from recongraph.domain.tax.interpretation import TaxPairInterpretation
+from recongraph.domain.tax.interpretation import TaxIntelligenceInterpretation
 from recongraph.domain.tax.factors import GSTINRelationState, PANRelationState
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class TaxV1ProjectionContract:
     Projects Tax Pair Interpretations into V1 legacy scalar scores.
     """
     @classmethod
-    def project(cls, interpretations: tuple[TaxPairInterpretation, ...]) -> TaxV1ScalarProjection:
+    def project(cls, interpretations: tuple[TaxIntelligenceInterpretation, ...]) -> TaxV1ScalarProjection:
         violations = set()
         
         same_legal_entity_proven = False

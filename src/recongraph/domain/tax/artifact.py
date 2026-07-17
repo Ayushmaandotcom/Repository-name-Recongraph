@@ -41,3 +41,34 @@ class TaxIdentifierArtifact:
             parsed_result=parsed,
             identity=identity
         )
+
+from decimal import Decimal
+
+@dataclass(frozen=True)
+class TaxIntelligenceArtifact:
+    """
+    Combines tax identity semantics with financial intelligence (rates, amounts)
+    for tax intelligence reasoning.
+    """
+    tax_identity: TaxIdentifierArtifact
+    amount: Decimal
+    net_amount: Decimal | None
+    tax_amount: Decimal | None
+    tax_rate: Decimal | None
+
+    @classmethod
+    def create(
+        cls, 
+        parsed: ParsedTaxIdentifierArtifact,
+        amount: Decimal,
+        net_amount: Decimal | None,
+        tax_amount: Decimal | None,
+        tax_rate: Decimal | None
+    ) -> 'TaxIntelligenceArtifact':
+        return cls(
+            tax_identity=TaxIdentifierArtifact.create(parsed),
+            amount=amount,
+            net_amount=net_amount,
+            tax_amount=tax_amount,
+            tax_rate=tax_rate
+        )

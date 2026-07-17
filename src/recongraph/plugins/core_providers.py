@@ -190,39 +190,91 @@ class TaxObservation:
     gsts: tuple[GSTRecord, ...]
 
 from recongraph.domain.tax.parser import DeterministicTaxParser
-from recongraph.domain.tax.artifact import TaxIdentifierArtifact
-from recongraph.domain.tax.interpretation import TaxPairInterpreter, TaxPairInterpretation
-from recongraph.domain.tax.factors import GSTINRelationState, PANRelationState
-from recongraph.domain.scopes import Proposition, PropositionSubject, ScopeKind
-from recongraph.domain.assertions import EvidenceAssertionIdentity, EvidenceAssertion
+from recongraph.domain.tax.artifact import TaxIntelligenceArtifact
+from recongraph.domain.tax.interpretation import TaxIntelligenceInterpreter, TaxIntelligenceInterpretation
+from recongraph.domain.tax.factors import GSTINRelationState, PANRelationState, RegimeRelationState, GrossNetRelationState
+from recongraph.domain.scopes import Proposition, PropositionSubject, ScopeKind, SubjectRef
+from recongraph.domain.assertions import EvidenceAssertionIdentity, EvidenceAssertion, AssertionPolarity
+from recongraph.domain.authority import AuthorityDescriptor, AuthorityBasisId
+from recongraph.domain.assertions import EvidenceAncestryRef
+from recongraph.domain.identity import KernelIdentityRef, IdentityDomainId, IdentitySchemaId, IdentityDigest
+from recongraph.domain.tax.claims import SAME_TAX_IDENTITY_CLAIM, VALID_REGIME_ALIGNMENT_CLAIM, GROSS_NET_CONSISTENCY_CLAIM
 
-class TaxEvidencePipeline(EvidencePipeline[TaxObservation, tuple[TaxPairInterpretation, ...]]):
+class TaxEvidencePipeline(EvidencePipeline[TaxObservation, tuple[TaxIntelligenceInterpretation, ...]]):
     def extract(self, purchases: Sequence[PurchaseRecord], gsts: Sequence[GSTRecord]) -> TaxObservation:
         return TaxObservation(purchases=tuple(purchases), gsts=tuple(gsts))
 
-    def interpret(self, observation: TaxObservation) -> tuple[TaxPairInterpretation, ...]:
+    def interpret(self, observation: TaxObservation) -> tuple[TaxIntelligenceInterpretation, ...]:
         interpretations = []
         for p in observation.purchases:
             p_val = DeterministicTaxParser.parse(p.tax_identity, field_id="tax_identity")
-            p_artifact = TaxIdentifierArtifact.create(p_val)
+            p_artifact = TaxIntelligenceArtifact.create(p_val, p.amount, p.net_amount, p.tax_amount, p.tax_rate)
             for g in observation.gsts:
                 g_val = DeterministicTaxParser.parse(g.tax_identity, field_id="tax_identity")
-                g_artifact = TaxIdentifierArtifact.create(g_val)
-                interp = TaxPairInterpreter.interpret(p_artifact, g_artifact)
+                g_artifact = TaxIntelligenceArtifact.create(g_val, g.amount, g.net_amount, g.tax_amount, g.tax_rate)
+                interp = TaxIntelligenceInterpreter.interpret(p_artifact, g_artifact)
                 interpretations.append(interp)
         return tuple(interpretations)
 
-    def contribute(self, interpretation: tuple[TaxPairInterpretation, ...]) -> EvidenceContributionV2[tuple[TaxPairInterpretation, ...]]:
+    def contribute(self, interpretation: tuple[TaxIntelligenceInterpretation, ...]) -> EvidenceContributionV2[tuple[TaxIntelligenceInterpretation, ...]]:
+        mock_ancestry = EvidenceAncestryRef(
+            identity=KernelIdentityRef(
+                domain=IdentityDomainId("recongraph.observation_occurrence"),
+                schema=IdentitySchemaId("recongraph.observation_occurrence.v1"),
+                digest=IdentityDigest("sha256:0000000000000000000000000000000000000000000000000000000000000000")
+            )
+        )
+        
+        assertions = []
+        for interp in interpretation:
+            # Tax Identity Assertions
+            if interp.gstin_relation.state == GSTINRelationState.EXACT_MATCH or interp.pan_relation.state == PANRelationState.EXACT_MATCH:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=SAME_TAX_IDENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+            elif interp.gstin_relation.state == GSTINRelationState.DISTINCT and interp.pan_relation.state == PANRelationState.DISTINCT:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=SAME_TAX_IDENTITY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.CONFLICT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+                
+            # Regime Alignment Assertions
+            if interp.regime_relation.state == RegimeRelationState.CONSISTENT:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=VALID_REGIME_ALIGNMENT_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+            elif interp.regime_relation.state == RegimeRelationState.INCONSISTENT:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=VALID_REGIME_ALIGNMENT_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.CONFLICT, magnitude=0.5, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+                
+            # Gross/Net Consistency Assertions
+            if interp.gross_net_relation.state == GrossNetRelationState.CONSISTENT:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=GROSS_NET_CONSISTENCY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.SUPPORT, magnitude=1.0, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+            elif interp.gross_net_relation.state == GrossNetRelationState.INCONSISTENT:
+                assertions.append(EvidenceAssertion(
+                    proposition=Proposition.create(claim=GROSS_NET_CONSISTENCY_CLAIM, kind=ScopeKind.RECORD_PAIR, left=[SubjectRef("urn:purchase")], right=[SubjectRef("urn:gst")]),
+                    polarity=AssertionPolarity.CONFLICT, magnitude=0.5, authority=AuthorityDescriptor(basis=AuthorityBasisId("tax_model")), ancestry=mock_ancestry
+                ))
+
+        # Re-derive score via legacy logic for backward compatibility in score field, but primary evidence is assertions
         from recongraph.domain.tax.projection import TaxV1ProjectionContract
-        
+        # TaxV1ProjectionContract expects TaxPairInterpretation, so we must mock or bypass it if it crashes.
+        # It expects gstin_relation and pan_relation, which our TaxIntelligenceInterpretation provides!
         projection = TaxV1ProjectionContract.project(interpretation)
-        
+
         return EvidenceContributionV2(
             provider_name=SignalName.TAX_IDENTITY,
             score=projection.score,
             violations=projection.violations,
             interpretation=interpretation,
-            metadata=projection.metadata
+            metadata={"assertions": tuple(assertions)}
         )
 
 class TaxEvidenceProvider:

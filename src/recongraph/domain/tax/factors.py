@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
+from decimal import Decimal
 
 class GSTINRelationState(Enum):
     EXACT_MATCH = auto()
@@ -26,4 +27,26 @@ class PANRelation:
     state: PANRelationState
     left_pan: Optional[str]
     right_pan: Optional[str]
-    derived_from_gstin: bool
+    derived_from_gstin: bool = False
+
+class RegimeRelationState(Enum):
+    CONSISTENT = auto()
+    INCONSISTENT = auto()
+    UNKNOWN = auto()
+
+class GrossNetRelationState(Enum):
+    CONSISTENT = auto()
+    INCONSISTENT = auto()
+    UNKNOWN = auto()
+
+@dataclass(frozen=True)
+class RegimeRelation:
+    state: RegimeRelationState
+    left_rate: Decimal | None
+    right_rate: Decimal | None
+
+@dataclass(frozen=True)
+class GrossNetRelation:
+    state: GrossNetRelationState
+    left_math_valid: bool
+    right_math_valid: bool
